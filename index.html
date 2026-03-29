@@ -1,1 +1,357 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Maridão App — Serviços na sua porta</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
 
+<!-- NAV -->
+<nav id="navbar">
+<a href="#" class="logo">Maridão <span>App</span></a>
+<div class="nav-links">
+<a href="#categorias">Serviços</a><a href="#como-funciona">Como funciona</a><a href="#profissionais">Profissionais</a><a href="#avaliacoes">Avaliações</a><a href="#trabalhe-conosco" class="hl">Trabalhe conosco</a>
+</div>
+<div class="nav-right">
+<button class="theme-btn" id="themeBtn" onclick="toggleTheme()">🌙</button>
+<div id="authBtns">
+<button class="btn btn-ghost" onclick="openM('loginM')">Entrar</button>
+<button class="btn btn-primary" onclick="openM('signupM')">Começar grátis</button>
+</div>
+<div class="user-area" id="userArea">
+<div class="avatar" id="userAv" onclick="document.getElementById('userDd').classList.toggle('show')">B</div>
+<div class="dropdown" id="userDd">
+<a href="#" onclick="showMyBookings();return false">📋 Meus serviços</a>
+<button onclick="logoutUser()">🚪 Sair</button>
+</div>
+</div>
+</div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+<div class="stag" style="text-align:center">⚡ Serviço em até 1 hora</div>
+<h1>Serviços para sua casa na palma da <em>sua mão</em></h1>
+<p>Conectamos você a profissionais verificados de confiança para qualquer serviço doméstico. Rápido, seguro e sem complicação.</p>
+<div class="hero-search"><input type="text" id="heroSearch" placeholder="O que você precisa? Ex: faxina, encanador..."><button onclick="heroSearchAction()">Buscar →</button></div>
+<div class="stats"><div class="stat"><div class="n">12k+</div><div class="l">Profissionais</div></div><div class="stat"><div class="n">98k</div><div class="l">Serviços feitos</div></div><div class="stat"><div class="n">4.9★</div><div class="l">Avaliação média</div></div></div>
+</section>
+
+<!-- CATEGORIES -->
+<section id="categorias" class="fade-in">
+<div class="stag">Categorias</div>
+<h2 class="stitle">O que você precisa?</h2>
+<div class="cat-grid" id="catGrid"></div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section id="como-funciona" class="fade-in">
+<div class="how">
+<div class="stag">Como funciona</div>
+<h2 class="stitle">Simples como pedir uma pizza</h2>
+<div class="how-grid">
+<div class="how-card"><div class="num">01</div><h4>Escolha o serviço</h4><p>Navegue pelas categorias ou busque o que precisa.</p></div>
+<div class="how-card"><div class="num">02</div><h4>Compare profissionais</h4><p>Veja avaliações, preços e disponibilidade.</p></div>
+<div class="how-card"><div class="num">03</div><h4>Combine no chat</h4><p>Descreva o serviço, combine preço e agende tudo pelo app.</p></div>
+<div class="how-card"><div class="num">04</div><h4>Pague com segurança</h4><p>Pagamento retido até você confirmar com código de conclusão.</p></div>
+</div>
+</div>
+</section>
+
+<!-- FEATURED PROS -->
+<section id="profissionais" class="fade-in">
+<div class="stag">Profissionais em destaque</div>
+<h2 class="stitle">Os melhores da sua cidade</h2>
+<div class="pros-grid" id="prosGrid"></div>
+</section>
+
+<!-- TRUST -->
+<section class="fade-in">
+<div class="stag">Por que escolher o Maridão App?</div>
+<h2 class="stitle">Transparência e segurança em cada detalhe</h2>
+<div class="trust-grid">
+<div class="trust-card"><div class="ic">🛡️</div><h4>Profissionais verificados</h4><p>Todos passam por checagem de documentos e identidade.</p></div>
+<div class="trust-card"><div class="ic">💳</div><h4>Pagamento protegido</h4><p>Só liberamos quando você confirmar com o código de conclusão.</p></div>
+<div class="trust-card"><div class="ic">🔄</div><h4>Garantia de qualidade</h4><p>Não ficou satisfeito? Devolvemos 100% do valor.</p></div>
+</div>
+</section>
+
+<!-- REVIEWS -->
+<section id="avaliacoes" class="fade-in">
+<div class="stag">Avaliações</div>
+<h2 class="stitle">O que dizem nossos clientes</h2>
+<div class="rev-grid">
+<div class="rev-card"><div class="rev-stars">★★★★★</div><div class="rev-text">"Nunca foi tão fácil encontrar um encanador. Em 30 minutos já estava resolvendo. Preço justo!"</div><div class="rev-who"><div class="av">👩</div><div><div class="nm">Márcia Oliveira</div><div class="sv">Encanamento · SP</div></div></div></div>
+<div class="rev-card"><div class="rev-stars">★★★★★</div><div class="rev-text">"Faxina pós-mudança incrível! Apartamento ficou melhor que antes. Já agendei pro mês que vem."</div><div class="rev-who"><div class="av">👨</div><div><div class="nm">Pedro Alves</div><div class="sv">Faxina · RJ</div></div></div></div>
+<div class="rev-card"><div class="rev-stars">★★★★★</div><div class="rev-text">"Sistema de pagamento perfeito. Só liberei depois de ver o serviço pronto. Total segurança!"</div><div class="rev-who"><div class="av">👩</div><div><div class="nm">Juliana Rocha</div><div class="sv">Elétrica · BH</div></div></div></div>
+</div>
+</section>
+
+<!-- CTA -->
+<div class="cta fade-in">
+<h2>Seu próximo serviço a um toque de distância</h2>
+<p>Cadastre-se grátis e encontre o profissional ideal em minutos.</p>
+<div class="btns"><button class="btn-w" onclick="openM('signupM')">Criar conta grátis →</button><a href="#trabalhe-conosco" class="btn-o">Quero ser profissional →</a></div>
+</div>
+
+<!-- PRO SIGNUP -->
+<section id="trabalhe-conosco" class="fade-in">
+<div class="stag">Para profissionais</div>
+<h2 class="stitle">Trabalhe com a gente e aumente sua renda</h2>
+<div class="work">
+<div class="work-grid">
+<div>
+<div class="ben-item"><div class="ben-ic">💰</div><div><h4>Sem mensalidade</h4><p>Pague apenas 25% por serviço realizado. Zero custo pra se cadastrar.</p></div></div>
+<div class="ben-item"><div class="ben-ic">📱</div><div><h4>Clientes na sua região</h4><p>Receba pedidos perto de você.</p></div></div>
+<div class="ben-item"><div class="ben-ic">⚡</div><div><h4>Pagamento rápido</h4><p>Receba em até 1 hora após confirmação.</p></div></div>
+<div class="ben-item"><div class="ben-ic">🛡️</div><div><h4>Você no controle</h4><p>Escolha horários e aceite só o que quiser.</p></div></div>
+<div class="wk-stats"><div class="wk-stat"><div class="v">R$ 3.800</div><div class="l">Média/mês dos tops</div></div><div class="wk-stat"><div class="v">24h</div><div class="l">Aprovação</div></div></div>
+</div>
+<div class="form-card">
+<h3>Criar perfil profissional</h3>
+<p class="sub">Cadastre-se grátis, explore o app e envie seus documentos quando quiser começar!</p>
+<div class="f-steps"><div class="f-step active" id="fs1"><div class="dot">1</div><div class="lbl">Dados</div></div><div class="f-step" id="fs2"><div class="dot">2</div><div class="lbl">Especialidade</div></div></div>
+<!-- Step 1: Basic info only -->
+<div class="panel active" id="proS1">
+<div class="fg"><label>Nome completo *</label><input type="text" id="proName" placeholder="Seu nome"></div>
+<div class="fg"><label>E-mail *</label><input type="email" id="proEmail" placeholder="seu@email.com"></div>
+<div class="fg"><label>CEP *</label><input type="text" id="proCep" placeholder="00000-000" maxlength="9"></div>
+<button class="btn-next" onclick="proNext(2)">Continuar →</button>
+</div>
+<!-- Step 2: Specialty -->
+<div class="panel" id="proS2">
+<div class="fg"><label>Especialidade principal *</label><select id="proSpec"><option value="">Selecione...</option><option>Faxina / Diarista</option><option>Encanamento</option><option>Elétrica</option><option>Pintura</option><option>Montagem de móveis</option><option>Ar-condicionado</option><option>Jardinagem</option><option>Chaveiro</option><option>Pet Sitter</option><option>Carreto</option><option>Mudança</option><option>Outro</option></select></div>
+<div class="fg"><label>Quanto cobra por hora (R$)? *</label><input type="number" id="proRate" placeholder="80"></div>
+<div class="fg"><label>Raio de atendimento</label><select id="proRadius"><option>Até 5 km</option><option>Até 10 km</option><option>Até 20 km</option><option>Até 30 km</option><option>Toda a cidade</option></select></div>
+<div class="fg"><label>Sobre você</label><textarea id="proBio" rows="3" placeholder="Conte sobre sua experiência..."></textarea></div>
+<label style="display:flex;gap:8px;font-size:.8rem;margin:12px 0;align-items:flex-start"><input type="checkbox" id="proTerms"><span>Concordo com os Termos de Uso e entendo que: <b>25% de comissão</b> é descontado de cada serviço.</span></label>
+<button class="btn-back" onclick="proNext(1)">← Voltar</button>
+<button class="btn-next" onclick="submitPro()">Criar perfil grátis 🚀</button>
+</div>
+<!-- Success -->
+<div class="panel" id="proS3" style="text-align:center;padding:20px 0">
+<div style="font-size:3rem">🎉</div>
+<h3 style="margin:10px 0">Perfil criado!</h3>
+<p style="color:var(--text2);font-size:.9rem">Você já pode explorar o app! Quando quiser aceitar seu primeiro serviço, pediremos seus documentos (CPF, RG e comprovante).</p>
+<div style="background:var(--pl);border-radius:var(--rs);padding:14px;margin-top:14px;text-align:left;font-size:.85rem">
+<div style="padding:4px 0">✅ Perfil criado — explore o app</div>
+<div style="padding:4px 0;color:var(--text2)">📄 Envie documentos quando quiser começar</div>
+<div style="padding:4px 0;color:var(--text2)">✅ Documentos aprovados → receba serviços</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+<div class="ft-grid">
+<div><div class="ft-brand">Maridão App</div><p>Conectamos você a profissionais verificados. Rápido, seguro e confiável.</p></div>
+<div><h5>Serviços</h5><a href="#">Encanamento</a><a href="#">Elétrica</a><a href="#">Faxina</a><a href="#">Pintura</a></div>
+<div><h5>Empresa</h5><a href="#">Sobre nós</a><a href="#">Blog</a><a href="#">Carreiras</a></div>
+<div><h5>Suporte</h5><a href="#">Ajuda</a><a href="#">Privacidade</a><a href="#">Termos</a><a href="#">Contato</a></div>
+</div>
+<div class="ft-bot">© 2025 Maridão App. Todos os direitos reservados. Feito com ❤️ no Brasil</div>
+</footer>
+<!-- === MODALS === -->
+
+<!-- LOGIN -->
+<div class="mo" id="loginM"><div class="md">
+<button class="md-close" onclick="closeM('loginM')">✕</button>
+<h3>Bem-vindo de volta 👋</h3><p class="msub">Entre para acessar sua conta.</p>
+<button class="btn-google" onclick="googleLogin()"><svg width="18" height="18" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg> Entrar com Google</button>
+<div class="divider">ou</div>
+<div class="fg"><label>E-mail</label><input type="email" id="logEmail" placeholder="seu@email.com"><div class="ferr" id="logEmailErr"></div></div>
+<div class="fg"><label>Senha</label><input type="password" id="logPass" placeholder="Sua senha"><div class="ferr" id="logPassErr"></div></div>
+<button class="btn-primary btn-full" id="logBtn" onclick="emailLogin()">Entrar →</button>
+<div class="switch">Não tem conta? <a onclick="closeM('loginM');openM('signupM')">Cadastre-se grátis</a></div>
+</div></div>
+
+<!-- SIGNUP Step 1 -->
+<div class="mo" id="signupM"><div class="md">
+<button class="md-close" onclick="closeM('signupM')">✕</button>
+<div id="sS1">
+<h3>Criar sua conta 🚀</h3><p class="msub">Grátis e sem complicação.</p>
+<button class="btn-google" onclick="googleLogin()"><svg width="18" height="18" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg> Cadastrar com Google</button>
+<div class="divider">ou</div>
+<div class="fg"><label>Nome completo *</label><input type="text" id="sName" placeholder="Seu nome"></div>
+<div class="fg"><label>E-mail *</label><input type="email" id="sEmail" placeholder="seu@email.com"><div class="ferr" id="sEmailErr"></div></div>
+<div class="fg"><label>CPF *</label><input type="text" id="sCPF" placeholder="000.000.000-00" maxlength="14"></div>
+<div class="fg"><label>Senha *</label><input type="password" id="sPass" placeholder="Mínimo 6 caracteres"><div class="ferr" id="sPassErr"></div></div>
+<button class="btn-primary btn-full" onclick="signupStep2()">Criar conta grátis →</button>
+<div class="switch">Já tem conta? <a onclick="closeM('signupM');openM('loginM')">Faça login</a></div>
+</div>
+<!-- SIGNUP Step 2: docs -->
+<div id="sS2" style="display:none">
+<button style="background:none;color:var(--text2);margin-bottom:12px;font-size:.88rem;cursor:pointer" onclick="document.getElementById('sS1').style.display='block';document.getElementById('sS2').style.display='none'">← Voltar</button>
+<h3>Verificação de identidade 🔐</h3><p class="msub">Para segurança de todos, verifique sua identidade.</p>
+<div style="background:#FFF8E1;border-radius:var(--rs);padding:12px;font-size:.8rem;color:#B45309;margin-bottom:14px">🛡️ Documentos criptografados e nunca compartilhados.</div>
+<div class="upload-box" id="cUpDoc" onclick="simUpload('cUpDoc')"><div class="ui">📄</div><div class="ul">RG ou CNH (frente) *</div><div class="uh">Clique para enviar</div></div>
+<div class="upload-box" id="cUpSelfie" onclick="simUpload('cUpSelfie')"><div class="ui">🤳</div><div class="ul">Selfie segurando documento *</div><div class="uh">Confirma sua identidade</div></div>
+<label style="display:flex;gap:8px;font-size:.8rem;margin:14px 0;align-items:flex-start"><input type="checkbox" id="sTerms"><span>Concordo com os <b>Termos de Uso</b> e <b>Política de Privacidade</b>.</span></label>
+<button class="btn-primary btn-full" id="sBtn" onclick="signupSubmit()">Criar conta grátis →</button>
+</div>
+<!-- SIGNUP Step 3: pending -->
+<div id="sS3" style="display:none;text-align:center;padding:20px 0">
+<div style="font-size:3rem">🎉</div><h3 style="margin:10px 0">Conta criada!</h3>
+<p style="color:var(--text2);font-size:.88rem;margin-bottom:16px">Documentos em análise. Você será notificado quando aprovado.</p>
+<button class="btn-primary btn-full" onclick="closeM('signupM')">Entendi →</button>
+</div>
+</div></div>
+
+<!-- PRO DOCS MODAL (shown when pro tries to accept first service) -->
+<div class="mo" id="docsM"><div class="md">
+<button class="md-close" onclick="closeM('docsM')">✕</button>
+<h3>Quase lá! Envie seus documentos 📄</h3>
+<p class="msub">Para aceitar serviços e receber pagamentos, precisamos verificar sua identidade.</p>
+<div style="background:#FFF8E1;border-radius:var(--rs);padding:12px;font-size:.8rem;color:#B45309;margin-bottom:14px">🛡️ Seus documentos são protegidos e nunca compartilhados com clientes.</div>
+<div class="fg"><label>CPF *</label><input type="text" id="dCPF" placeholder="000.000.000-00" maxlength="14"></div>
+<div class="fg"><label>Data de nascimento *</label><input type="date" id="dDob"></div>
+<div class="upload-box" id="dUpDoc" onclick="simUpload('dUpDoc')"><div class="ui">📄</div><div class="ul">RG ou CNH (frente) *</div><div class="uh">Clique para enviar</div></div>
+<div class="upload-box" id="dUpSelfie" onclick="simUpload('dUpSelfie')"><div class="ui">🤳</div><div class="ul">Selfie segurando documento *</div><div class="uh">Confirma sua identidade</div></div>
+<div class="upload-box" id="dUpAddr" onclick="simUpload('dUpAddr')"><div class="ui">🏠</div><div class="ul">Comprovante de residência *</div><div class="uh">Últimos 3 meses</div></div>
+<div class="fg"><label>Chave PIX para receber *</label><input type="text" id="dPix" placeholder="CPF, e-mail ou chave aleatória"></div>
+<label style="display:flex;gap:8px;font-size:.8rem;margin:14px 0;align-items:flex-start"><input type="checkbox" id="dTerms"><span>Concordo com os <b>Termos de Uso</b> e a cobrança de <b>25% de comissão</b> por serviço.</span></label>
+<button class="btn-primary btn-full" onclick="submitProDocs()">Enviar documentos e começar a trabalhar →</button>
+</div></div>
+
+<!-- PENDING MODAL -->
+<div class="mo" id="pendingM"><div class="md" style="text-align:center">
+<button class="md-close" onclick="closeM('pendingM')">✕</button>
+<div style="font-size:3rem">⏳</div><h3 style="margin:10px 0">Documentos em análise</h3>
+<p style="color:var(--text2);font-size:.88rem;margin-bottom:16px">Seus documentos estão sendo analisados. Assim que aprovados, você poderá aceitar serviços e receber pagamentos!</p>
+<div style="background:var(--gl);border-radius:var(--rs);padding:14px;text-align:left;margin-bottom:16px">
+<div style="font-size:.85rem;padding:4px 0">✅ Documentos enviados</div>
+<div style="font-size:.85rem;padding:4px 0;color:var(--p)">⏳ Análise em andamento (até 24h)</div>
+<div style="font-size:.85rem;padding:4px 0;color:var(--text2)">💰 Comece a receber serviços</div>
+</div>
+<button class="btn-primary btn-full" onclick="closeM('pendingM')">Entendi, vou aguardar</button>
+</div></div>
+
+<!-- BOOK MODAL -->
+<div class="mo" id="bookM"><div class="md" style="max-width:520px">
+<button class="md-close" onclick="closeM('bookM')">✕</button>
+<div class="panel active" id="bkS1">
+<h3>Agendar serviço 📅</h3><p class="msub">Preencha os detalhes obrigatórios.</p>
+<div class="fg"><label>Tipo de serviço *</label><select id="bkSvc" onchange="toggleCarreto()"><option>Encanamento</option><option>Elétrica</option><option>Faxina</option><option>Pintura</option><option>Montagem de móveis</option><option>Ar-condicionado</option><option>Jardinagem</option><option>Chaveiro</option><option>Carreto</option><option>Mudança</option><option>Pet Sitter</option></select></div>
+<div id="normalF">
+<div class="fg"><label>Endereço completo *</label><input type="text" id="bkAddr" placeholder="Rua, número, bairro, cidade"></div>
+<div class="fr"><div class="fg"><label>Data *</label><input type="date" id="bkDate"></div><div class="fg"><label>Horário *</label><input type="time" id="bkTime"></div></div>
+<div class="fg"><label>Descrição do serviço</label><textarea id="bkDesc" rows="3" placeholder="Descreva o que precisa..."></textarea></div>
+</div>
+<div id="carretoF" style="display:none">
+<div style="background:var(--pl);border-radius:var(--rs);padding:10px;font-size:.8rem;color:var(--p);margin-bottom:12px;text-align:center">💬 Estimativa — combine o valor final no chat!</div>
+<div class="fg"><label>📍 Cidade de retirada *</label><input type="text" id="cFrom" placeholder="Digite a cidade..." autocomplete="off"><div class="autocomplete-list" id="acFrom"></div></div>
+<div class="fg"><label>🏁 Cidade de entrega *</label><input type="text" id="cTo" placeholder="Digite a cidade..." autocomplete="off"><div class="autocomplete-list" id="acTo"></div></div>
+<div class="fg"><label>📦 Tipo de carga *</label><select id="cType" onchange="calcCarreto()"><option value="1">Pequenos volumes</option><option value="1.2">Médio porte</option><option value="1.4">Grande porte</option><option value="1.7">Mudança completa</option></select></div>
+<div class="fr"><div class="fg"><label>Data *</label><input type="date" id="cDate"></div><div class="fg"><label>Horário *</label><input type="time" id="cTime"></div></div>
+<div id="cEstimate" style="display:none;background:var(--bg);border-radius:var(--rs);padding:14px;margin:10px 0">
+<div class="pay-row"><span>Distância</span><span id="eDist">—</span></div>
+<div class="pay-row"><span>Carga</span><span id="eCargo">—</span></div>
+<div class="pay-row total"><span>Estimativa</span><span id="eTotal">—</span></div>
+</div>
+</div>
+<button class="btn-primary btn-full" onclick="searchPros()" style="margin-top:14px">Buscar profissionais →</button>
+</div>
+<div class="panel" id="bkS2">
+<button style="background:none;color:var(--text2);margin-bottom:12px;font-size:.88rem;cursor:pointer" onclick="bkGo(1)">← Voltar</button>
+<h3>Profissionais disponíveis</h3><p class="msub" id="prosCount">3 encontrados</p>
+<div id="prosResults"></div>
+</div>
+</div></div>
+
+<!-- CHAT MODAL -->
+<div class="mo" id="chatM"><div class="md chat-md">
+<div class="chat-hdr">
+<div class="chat-av" id="chatAv">🔧</div>
+<div><div class="chat-nm" id="chatNm">Profissional</div><div class="chat-st">Online agora</div></div>
+<button class="md-close" onclick="closeM('chatM')" style="position:static;background:none;color:var(--text2)">✕</button>
+</div>
+<div class="chat-sec">🔒 Contatos externos bloqueados. Combine tudo aqui e pague pelo app!</div>
+<div class="chat-msgs" id="chatMsgs"></div>
+<div class="chat-pay" id="chatPay"><div class="cp-label">VALOR COMBINADO</div><div class="cp-price" id="cpPrice">R$ —</div><button onclick="chatPayNow()">💳 Pagar agora</button></div>
+<div class="chat-in"><input type="text" id="chatIn" placeholder="Digite sua mensagem..." onkeydown="if(event.key==='Enter')sendMsg()"><button onclick="sendMsg()">➤</button></div>
+</div></div>
+
+<!-- PAYMENT MODAL -->
+<div class="mo" id="payM"><div class="md">
+<button class="md-close" onclick="closeM('payM')">✕</button>
+<h3>Confirmar pagamento 💳</h3><p class="msub">Seu dinheiro fica protegido até o serviço ser concluído.</p>
+<div class="pay-bk"><div class="pay-row"><span>Profissional</span><span id="pyPro">—</span></div><div class="pay-row"><span>Serviço</span><span id="pySvc">—</span></div><div class="pay-row total"><span>Valor do serviço</span><span id="pyTotal">—</span></div></div>
+<div style="background:#EBF5FF;border-radius:var(--rs);padding:14px;margin-bottom:12px"><div style="font-size:.75rem;font-weight:700;color:#1D4ED8;margin-bottom:6px">👤 O QUE VOCÊ PAGA</div><div class="pay-row"><span>Serviço</span><span id="pyCliSvc">—</span></div><div class="pay-row" style="font-size:.82rem;color:var(--text2)"><span>Taxa <span id="pyGwLbl">(cartão ~5%)</span></span><span id="pyGw">—</span></div><div class="pay-row total" style="color:#1D4ED8"><span>Total</span><span id="pyCliFinal">—</span></div></div>
+<div style="background:var(--gl);border-radius:var(--rs);padding:14px;margin-bottom:12px"><div style="font-size:.75rem;font-weight:700;color:#059669;margin-bottom:6px">🛠️ PROFISSIONAL RECEBE</div><div class="pay-row"><span>Serviço</span><span id="pyProSvc">—</span></div><div class="pay-row" style="font-size:.82rem;color:var(--text2)"><span>Comissão (25%)</span><span id="pyComm" style="color:var(--red)">—</span></div><div class="pay-row total" style="color:#059669"><span>Recebe</span><span id="pyNet">—</span></div></div>
+<div class="pay-tabs"><div class="pay-tab active" onclick="selPay('card',this)">💳 Cartão</div><div class="pay-tab" onclick="selPay('pix',this)">📱 PIX</div><div class="pay-tab" onclick="selPay('boleto',this)">📄 Boleto</div></div>
+<div class="parea active" id="paCard"><div class="fg"><label>Número</label><input type="text" placeholder="0000 0000 0000 0000" maxlength="19"></div><div class="fr"><div class="fg"><label>Validade</label><input type="text" placeholder="MM/AA" maxlength="5"></div><div class="fg"><label>CVV</label><input type="text" placeholder="123" maxlength="4"></div></div></div>
+<div class="parea" id="paPix"><div style="text-align:center;font-size:.88rem;font-weight:600;margin-bottom:8px">Escaneie ou copie:</div><div class="pix-code" id="pixCode">00020126580014BR.GOV.BCB.PIX0136maridaoapp@pagamentos.com.br520400005303986</div><button class="btn-copy" onclick="copyTxt('pixCode',this)">Copiar código PIX</button></div>
+<div class="parea" id="paBoleto"><div class="boleto-bar"></div><div class="pix-code" id="boletoCode">23790.12345 67890.123456 78901.234567 1 90210000015000</div><button class="btn-copy" onclick="copyTxt('boletoCode',this)">Copiar linha digitável</button><p style="text-align:center;font-size:.78rem;color:var(--text2);margin-top:10px">⚠️ Compensa em até 3 dias úteis.</p></div>
+<button class="btn-primary btn-full" onclick="confirmPay()" style="margin-top:14px">Pagar e aguardar profissional →</button>
+</div></div>
+
+<!-- TRACKING MODAL -->
+<div class="mo" id="trackM"><div class="md">
+<button class="md-close" onclick="closeM('trackM')">✕</button>
+<h3>Acompanhe seu serviço 📍</h3><p class="msub">Pagamento retido com segurança.</p>
+<div class="trk-steps" id="trkSteps">
+<div class="trk-step now"><div class="trk-dot">📩</div><div><div class="trk-lbl">Profissional notificado</div><div class="trk-time">Agora</div></div></div>
+<div class="trk-step"><div class="trk-dot">🚗</div><div><div class="trk-lbl">A caminho</div><div class="trk-time">—</div></div></div>
+<div class="trk-step"><div class="trk-dot">🔑</div><div><div class="trk-lbl">Código de chegada</div><div class="trk-time">—</div></div></div>
+<div class="trk-step"><div class="trk-dot">🔧</div><div><div class="trk-lbl">Em andamento</div><div class="trk-time">—</div></div></div>
+<div class="trk-step"><div class="trk-dot">✅</div><div><div class="trk-lbl">Concluído</div><div class="trk-time">—</div></div></div>
+</div>
+<!-- Arrival code display -->
+<div id="arrCodeSec" style="display:none"><div style="background:linear-gradient(135deg,var(--p),#FF8F5E);border-radius:var(--r);padding:20px;text-align:center;color:#fff;margin:14px 0"><div style="font-size:.75rem;opacity:.8;margin-bottom:6px">🔑 CÓDIGO DE CHEGADA</div><div style="font-size:.7rem;opacity:.7;margin-bottom:8px">Mostre ao profissional quando chegar</div><div id="arrCode" style="font-size:2.5rem;font-weight:800;letter-spacing:12px;font-family:monospace;background:rgba(255,255,255,.2);border-radius:12px;padding:10px">----</div></div></div>
+<!-- Arrival verify -->
+<div id="arrVerSec" style="display:none"><div style="background:#EBF5FF;border-radius:var(--r);padding:20px;text-align:center;margin:14px 0"><div style="font-size:.85rem;font-weight:700;color:#1D4ED8;margin-bottom:8px">🔑 Profissional chegou?</div><div style="font-size:.78rem;color:var(--text2);margin-bottom:12px">Digite o código de 4 dígitos</div><div style="display:flex;gap:8px;justify-content:center;margin-bottom:12px"><input type="text" id="aI1" maxlength="1" style="width:48px;height:54px;text-align:center;font-size:1.5rem;font-weight:800" oninput="aNext(this,1)"><input type="text" id="aI2" maxlength="1" style="width:48px;height:54px;text-align:center;font-size:1.5rem;font-weight:800" oninput="aNext(this,2)"><input type="text" id="aI3" maxlength="1" style="width:48px;height:54px;text-align:center;font-size:1.5rem;font-weight:800" oninput="aNext(this,3)"><input type="text" id="aI4" maxlength="1" style="width:48px;height:54px;text-align:center;font-size:1.5rem;font-weight:800" oninput="aNext(this,4)"></div><div id="arrErr" style="display:none;color:var(--red);font-size:.82rem;margin-bottom:8px">❌ Código incorreto</div><button class="btn-primary btn-full" onclick="verifyArr()">Confirmar chegada →</button></div></div>
+<!-- Completion code -->
+<div id="compSec" style="display:none"><div style="background:linear-gradient(135deg,#059669,#10B981);border-radius:var(--r);padding:20px;text-align:center;color:#fff;margin:14px 0"><div style="font-size:.75rem;opacity:.8;margin-bottom:6px">✅ CÓDIGO DE CONCLUSÃO</div><div style="font-size:.7rem;opacity:.7;margin-bottom:10px">Digite o código que o profissional mostrar</div><div style="display:flex;gap:8px;justify-content:center;margin-bottom:12px"><input type="text" id="cI1" maxlength="1" style="width:48px;height:54px;text-align:center;font-size:1.5rem;font-weight:800;border:none;border-radius:10px;background:rgba(255,255,255,.25);color:#fff" oninput="cNext(this,1)"><input type="text" id="cI2" maxlength="1" style="width:48px;height:54px;text-align:center;font-size:1.5rem;font-weight:800;border:none;border-radius:10px;background:rgba(255,255,255,.25);color:#fff" oninput="cNext(this,2)"><input type="text" id="cI3" maxlength="1" style="width:48px;height:54px;text-align:center;font-size:1.5rem;font-weight:800;border:none;border-radius:10px;background:rgba(255,255,255,.25);color:#fff" oninput="cNext(this,3)"><input type="text" id="cI4" maxlength="1" style="width:48px;height:54px;text-align:center;font-size:1.5rem;font-weight:800;border:none;border-radius:10px;background:rgba(255,255,255,.25);color:#fff" oninput="cNext(this,4)"></div><div id="compErr" style="display:none;font-size:.82rem;color:#FEE2E2;margin-bottom:8px">❌ Código incorreto</div><button onclick="verifyComp()" style="width:100%;padding:12px;border-radius:10px;background:#fff;color:#059669;font-weight:700;border:none;cursor:pointer">✅ Confirmar e liberar pagamento</button></div></div>
+<!-- Done -->
+<div id="doneSec" style="display:none;text-align:center;padding:16px 0">
+<div style="font-size:3rem">🎉</div><h3 style="margin:10px 0">Serviço concluído!</h3>
+<p style="color:var(--text2);font-size:.88rem">Pagamento de <b id="doneAmt">R$ —</b> liberado.</p>
+<div style="display:flex;gap:4px;justify-content:center;margin:14px 0;font-size:1.5rem" id="stars"><span onclick="rate(1)">☆</span><span onclick="rate(2)">☆</span><span onclick="rate(3)">☆</span><span onclick="rate(4)">☆</span><span onclick="rate(5)">☆</span></div>
+<button class="btn-primary btn-full" onclick="closeM('trackM')">Fechar</button>
+</div>
+</div></div>
+<script src="js/firebase.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/carreto.js"></script>
+<script src="js/app.js"></script>
+<script src="js/chat.js"></script>
+<script src="js/payment.js"></script>
+<script src="js/tracking.js"></script>
+<script src="js/pro.js"></script>
+<script>
+// === INIT ===
+document.addEventListener('DOMContentLoaded', () => {
+  // Theme
+  try { if (localStorage.getItem('mt') === 'dark') { document.documentElement.setAttribute('data-theme', 'dark'); document.getElementById('themeBtn').textContent = '☀️'; } } catch (e) {}
+  // Render
+  renderCats();
+  renderPros();
+  // Autocomplete
+  setupAC('cFrom', 'acFrom');
+  setupAC('cTo', 'acTo');
+  // Navbar scroll
+  window.addEventListener('scroll', () => document.getElementById('navbar').classList.toggle('scrolled', window.scrollY > 20));
+  // Scroll animations
+  const obs = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) e.target.classList.add('vis'); }), { threshold: .1 });
+  document.querySelectorAll('.fade-in').forEach(el => obs.observe(el));
+  // Date min
+  const td = new Date().toISOString().split('T')[0];
+  document.querySelectorAll('input[type="date"]').forEach(el => el.setAttribute('min', td));
+  // Close dropdown on outside click
+  document.addEventListener('click', e => { if (!e.target.closest('.user-area')) document.getElementById('userDd').classList.remove('show'); });
+});
+</script>
+</body>
+</html>
