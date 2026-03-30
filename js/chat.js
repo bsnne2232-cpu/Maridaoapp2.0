@@ -89,8 +89,16 @@ function sendMsg() {
         return;
       }
       const bp = selPro.p || 100;
-      if (pr > bp * 5) {
-        setTimeout(() => addMsg('R$ ' + pr + ' parece alto. Normalmente cobro R$ ' + bp + ' a R$ ' + (bp * 3) + '. Vamos combinar melhor?', 'recv'), 800);
+      // For carreto or services without fixed price, use the estimate or be more flexible
+      const estimate = window.bkDetails && window.bkDetails.svc === 'Carreto' ? (parseFloat(document.getElementById('eTotal')?.textContent?.replace(/[^\d.]/g,'')) || 0) : 0;
+      const maxPrice = estimate > 0 ? estimate * 3 : (bp * 8);
+      const minPrice = estimate > 0 ? estimate * 0.15 : (bp * 0.3);
+      if (pr > maxPrice) {
+        setTimeout(() => addMsg('R$ ' + pr + ' parece muito acima do esperado pra esse serviço. Vamos combinar um valor mais justo?', 'recv'), 800);
+        return;
+      }
+      if (pr < minPrice && estimate > 0) {
+        setTimeout(() => addMsg('R$ ' + pr + ' está muito abaixo da estimativa de R$ ' + estimate.toFixed(0) + '. Preciso de um valor que cubra meus custos.', 'recv'), 800);
         return;
       }
       chatSt.agreed = true; chatSt.price = pr;
