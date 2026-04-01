@@ -1,4 +1,4 @@
-// === GATEWAY FEES ===
+// === GATEWAY FEES (uses backend API) ===
 function gwFee(m, a) {
   if (m === 'card') {
     if (a >= 200) return { r: .03, l: 'cartão 3%', f: a * .03 };
