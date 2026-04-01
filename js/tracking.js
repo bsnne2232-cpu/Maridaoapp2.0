@@ -1,8 +1,22 @@
-// === CONFIRM PAYMENT → START TRACKING ===
-function confirmPay() {
+// === CONFIRM PAYMENT → START TRACKING (codes from backend) ===
+async function confirmPay() {
   closeM('payM'); openM('trackM');
-  window.arrCode = String(Math.floor(1000 + Math.random() * 9000));
-  window.compCode = String(Math.floor(1000 + Math.random() * 9000));
+  // Get verification codes from backend
+  let arrCode, compCode;
+  try {
+    const res = await fetch(API_URL + '/api/generate-codes', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: CU ? CU.uid : null })
+    }).then(r => r.json());
+    arrCode = res.arrivalCode;
+    compCode = res.completionCode;
+  } catch (e) {
+    // Fallback to local generation if backend fails
+    arrCode = String(Math.floor(1000 + Math.random() * 9000));
+    compCode = String(Math.floor(1000 + Math.random() * 9000));
+  }
+  window.arrCode = arrCode;
+  window.compCode = compCode;
   document.getElementById('arrCode').textContent = window.arrCode;
   ['arrCodeSec', 'arrVerSec', 'compSec', 'doneSec'].forEach(id => document.getElementById(id).style.display = 'none');
   document.getElementById('arrCodeSec').style.display = 'block';
