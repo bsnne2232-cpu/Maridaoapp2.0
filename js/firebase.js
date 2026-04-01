@@ -8,6 +8,7 @@ firebase.initializeApp({
   appId: "1:817190352839:web:7a9dd8196254a93bbd0be2"
 });
 const auth = firebase.auth(), db = firebase.firestore();
+const API_URL = 'https://maridaoapi.bsnne2232.workers.dev';
 
 // === STATE ===
 let CU = null, selPro = null, selSvc = '', agreedPrice = 0, payMethod = 'card';
@@ -63,7 +64,7 @@ async function emailLogin() {
   b.disabled = false; b.textContent = 'Entrar →';
 }
 
-// === EMAIL SIGNUP ===
+// === EMAIL SIGNUP (CPF goes to backend, only masked version saved) ===
 async function signupStep2() {
   const nm = document.getElementById('sName').value.trim(), em = document.getElementById('sEmail').value.trim();
   const cpf = document.getElementById('sCPF').value.trim(), pw = document.getElementById('sPass').value;
@@ -74,11 +75,18 @@ async function signupStep2() {
   if (pw.length < 6) return showErr('sPassErr', 'Mínimo 6 caracteres');
   const b = document.querySelector('#sS1 .btn-primary'); b.disabled = true; b.innerHTML = '<span class="spinner"></span>';
   try {
+    // Send CPF to backend for validation and masking
+    const cpfRes = await fetch(API_URL + '/api/validate-cpf', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cpf })
+    }).then(r => r.json());
+    if (!cpfRes.valid) { toast('CPF inválido', 'err'); b.disabled = false; b.textContent = 'Criar conta grátis →'; return; }
+    // Create Firebase account
     const c = await auth.createUserWithEmailAndPassword(em, pw);
     await c.user.updateProfile({ displayName: nm });
-    const cpfMasked = '***.***.'+cpf.replace(/\D/g,'').slice(7,10)+'-**';
+    // Save ONLY masked CPF - full CPF never touches Firestore
     await db.collection('users').doc(c.user.uid).set({
-      name: nm, email: em, cpfMasked, role: 'client',
+      name: nm, email: em, cpfMasked: cpfRes.masked, role: 'client',
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
     closeM('signupM'); toast('Conta criada! 🎉', 'ok'); updNav();
