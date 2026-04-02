@@ -3,6 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="X-Content-Type-Options" content="nosniff">
+<meta http-equiv="X-Frame-Options" content="DENY">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' https://*.firebaseio.com https://*.googleapis.com https://*.firebaseapp.com https://maridaoapi.bsnne2232.workers.dev; frame-src https://accounts.google.com https://*.firebaseapp.com; img-src 'self' data:;">
 <title>Maridão App — Serviços na sua porta</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -187,7 +191,7 @@
 <div class="fg"><label>Nome completo *</label><input type="text" id="sName" placeholder="Seu nome"></div>
 <div class="fg"><label>E-mail *</label><input type="email" id="sEmail" placeholder="seu@email.com"><div class="ferr" id="sEmailErr"></div></div>
 <div class="fg"><label>CPF *</label><input type="text" id="sCPF" placeholder="000.000.000-00" maxlength="14"></div>
-<div class="fg"><label>Senha *</label><input type="password" id="sPass" placeholder="Mínimo 6 caracteres"><div class="ferr" id="sPassErr"></div></div>
+<div class="fg"><label>Senha *</label><input type="password" id="sPass" placeholder="Mín. 8 chars, maiúscula, número e especial"><div class="ferr" id="sPassErr"></div></div>
 <button class="btn-primary btn-full" onclick="signupStep2()">Criar conta grátis →</button>
 <div class="switch">Já tem conta? <a onclick="closeM('signupM');openM('loginM')">Faça login</a></div>
 </div>
@@ -291,10 +295,10 @@
 <div style="background:#EBF5FF;border-radius:var(--rs);padding:14px;margin-bottom:12px"><div style="font-size:.75rem;font-weight:700;color:#1D4ED8;margin-bottom:6px">👤 O QUE VOCÊ PAGA</div><div class="pay-row"><span>Serviço</span><span id="pyCliSvc">—</span></div><div class="pay-row" style="font-size:.82rem;color:var(--text2)"><span>Taxa <span id="pyGwLbl">(cartão ~5%)</span></span><span id="pyGw">—</span></div><div class="pay-row total" style="color:#1D4ED8"><span>Total</span><span id="pyCliFinal">—</span></div></div>
 <div style="background:var(--gl);border-radius:var(--rs);padding:14px;margin-bottom:12px"><div style="font-size:.75rem;font-weight:700;color:#059669;margin-bottom:6px">🛠️ PROFISSIONAL RECEBE</div><div class="pay-row"><span>Serviço</span><span id="pyProSvc">—</span></div><div class="pay-row" style="font-size:.82rem;color:var(--text2)"><span>Comissão (25%)</span><span id="pyComm" style="color:var(--red)">—</span></div><div class="pay-row total" style="color:#059669"><span>Recebe</span><span id="pyNet">—</span></div></div>
 <div class="pay-tabs"><div class="pay-tab active" onclick="selPay('card',this)">💳 Cartão</div><div class="pay-tab" onclick="selPay('pix',this)">📱 PIX</div><div class="pay-tab" onclick="selPay('boleto',this)">📄 Boleto</div></div>
-<div class="parea active" id="paCard"><div class="fg"><label>Número</label><input type="text" placeholder="0000 0000 0000 0000" maxlength="19"></div><div class="fr"><div class="fg"><label>Validade</label><input type="text" placeholder="MM/AA" maxlength="5"></div><div class="fg"><label>CVV</label><input type="text" placeholder="123" maxlength="4"></div></div></div>
+<div class="parea active" id="paCard"><div class="fg"><label>Número</label><input type="text" id="cardNum" placeholder="0000 0000 0000 0000" maxlength="19" inputmode="numeric" autocomplete="cc-number"></div><div class="fr"><div class="fg"><label>Validade</label><input type="text" id="cardExp" placeholder="MM/AA" maxlength="5" inputmode="numeric" autocomplete="cc-exp"></div><div class="fg"><label>CVV</label><input type="text" id="cardCvv" placeholder="123" maxlength="4" inputmode="numeric" autocomplete="cc-csc"></div></div></div>
 <div class="parea" id="paPix"><div style="text-align:center;font-size:.88rem;font-weight:600;margin-bottom:8px">Escaneie ou copie:</div><div class="pix-code" id="pixCode">00020126580014BR.GOV.BCB.PIX0136maridaoapp@pagamentos.com.br520400005303986</div><button class="btn-copy" onclick="copyTxt('pixCode',this)">Copiar código PIX</button></div>
 <div class="parea" id="paBoleto"><div class="boleto-bar"></div><div class="pix-code" id="boletoCode">23790.12345 67890.123456 78901.234567 1 90210000015000</div><button class="btn-copy" onclick="copyTxt('boletoCode',this)">Copiar linha digitável</button><p style="text-align:center;font-size:.78rem;color:var(--text2);margin-top:10px">⚠️ Compensa em até 3 dias úteis.</p></div>
-<button class="btn-primary btn-full" onclick="confirmPay()" style="margin-top:14px">Pagar e aguardar profissional →</button>
+<button class="btn-primary btn-full" onclick="validateAndPay()" style="margin-top:14px">Pagar e aguardar profissional →</button>
 </div></div>
 
 <!-- TRACKING MODAL -->

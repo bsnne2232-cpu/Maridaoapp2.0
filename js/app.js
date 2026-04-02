@@ -10,7 +10,7 @@ const CATS = [
 
 function renderCats() {
   document.getElementById('catGrid').innerHTML = CATS.map(c =>
-    `<div class="cat-card" onclick="openSvc('${c.n}')"><div class="ic">${c.i}</div><div class="nm">${c.n}</div><div class="ct">${c.c} profissionais</div></div>`
+    `<div class="cat-card" onclick="openSvc('${esc(c.n)}')"><div class="ic">${esc(c.i)}</div><div class="nm">${esc(c.n)}</div><div class="ct">${esc(c.c)} profissionais</div></div>`
   ).join('');
 }
 
@@ -87,7 +87,7 @@ const PDB = {
 function renderPros() {
   const f = [PDB['Encanamento'][0], PDB['Elétrica'][0], PDB['Faxina'][0]];
   document.getElementById('prosGrid').innerHTML = f.map(p =>
-    `<div class="pro-card"><div class="pro-hdr"><div class="pro-av">${p.e}</div><div><div class="pro-nm">${p.n}</div><div class="pro-rl">${p.t[0]}</div></div></div><div class="pro-rt">★ ${p.r} (${p.rv})</div><div class="pro-tags">${p.t.map(t => `<span>${t}</span>`).join('')}</div><div class="pro-pr">A partir de <b>R$ ${p.p}</b></div><button class="btn-book" onclick="quickBook('${p.n}')">Agendar</button></div>`
+    `<div class="pro-card"><div class="pro-hdr"><div class="pro-av">${esc(p.e)}</div><div><div class="pro-nm">${esc(p.n)}</div><div class="pro-rl">${esc(p.t[0])}</div></div></div><div class="pro-rt">★ ${esc(String(p.r))} (${esc(String(p.rv))})</div><div class="pro-tags">${p.t.map(t => `<span>${esc(t)}</span>`).join('')}</div><div class="pro-pr">A partir de <b>R$ ${esc(String(p.p))}</b></div><button class="btn-book" onclick="quickBook('${esc(p.n)}')">Agendar</button></div>`
   ).join('');
 }
 
@@ -127,9 +127,11 @@ function searchPros() {
   }
   const pros = PDB[svc] || PDB['Faxina'];
   document.getElementById('prosCount').textContent = pros.length + ' encontrados';
-  document.getElementById('prosResults').innerHTML = pros.map(p => {
-    const ph = (!isC && p.p) ? `<div style="font-weight:700;color:var(--p)">R$ ${p.p}</div>` : '';
-    return `<div class="pro-result" style="display:flex;align-items:center;gap:14px;padding:14px;border:1px solid var(--border);border-radius:var(--rs);margin-bottom:10px;cursor:pointer;transition:all .2s" onclick='pickPro(${JSON.stringify(p).replace(/'/g, "&#39;")}, "${svc}")' onmouseover="this.style.borderColor='var(--p)'" onmouseout="this.style.borderColor=''"><div style="width:44px;height:44px;border-radius:50%;background:var(--pl);display:flex;align-items:center;justify-content:center;font-size:1.2rem">${p.e}</div><div style="flex:1"><div style="font-weight:700">${p.n} ${p.top ? '⭐' : ''}</div><div style="font-size:.78rem;color:var(--text2)">${p.t.join(' · ')} · ${p.d}</div><div style="font-size:.82rem;color:var(--yellow);font-weight:600">★ ${p.r}</div></div>${ph}</div>`;
+  // Store pros for safe onclick (avoid inline JSON injection)
+  window._searchPros = pros;
+  document.getElementById('prosResults').innerHTML = pros.map((p, idx) => {
+    const ph = (!isC && p.p) ? `<div style="font-weight:700;color:var(--p)">R$ ${esc(String(p.p))}</div>` : '';
+    return `<div class="pro-result" style="display:flex;align-items:center;gap:14px;padding:14px;border:1px solid var(--border);border-radius:var(--rs);margin-bottom:10px;cursor:pointer;transition:all .2s" onclick="pickPro(window._searchPros[${idx}],'${esc(svc)}')" onmouseover="this.style.borderColor='var(--p)'" onmouseout="this.style.borderColor=''"><div style="width:44px;height:44px;border-radius:50%;background:var(--pl);display:flex;align-items:center;justify-content:center;font-size:1.2rem">${esc(p.e)}</div><div style="flex:1"><div style="font-weight:700">${esc(p.n)} ${p.top ? '⭐' : ''}</div><div style="font-size:.78rem;color:var(--text2)">${p.t.map(t => esc(t)).join(' · ')} · ${esc(p.d)}</div><div style="font-size:.82rem;color:var(--yellow);font-weight:600">★ ${esc(String(p.r))}</div></div>${ph}</div>`;
   }).join('');
   bkGo(2);
 }

@@ -30,7 +30,7 @@ function updNav() {
   const a = document.getElementById('authBtns'), u = document.getElementById('userArea');
   if (CU) {
     a.style.display = 'none'; u.classList.add('show');
-    const n = CU.displayName || CU.email.split('@')[0];
+    const n = CU.displayName || (CU.email ? CU.email.split('@')[0] : 'U');
     document.getElementById('userAv').textContent = n.charAt(0).toUpperCase();
   } else {
     a.style.display = 'flex'; u.classList.remove('show');
@@ -48,13 +48,16 @@ async function googleLogin() {
     await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());
     closeM('loginM'); closeM('signupM');
     toast('Login realizado! 🎉', 'ok');
-  } catch (e) { toast('Erro: ' + e.message, 'err'); }
+  } catch (e) {
+    if (e.code !== 'auth/popup-closed-by-user') toast('Erro ao fazer login com Google. Tente novamente.', 'err');
+  }
 }
 
 // === EMAIL LOGIN ===
 async function emailLogin() {
   const em = document.getElementById('logEmail').value.trim(), pw = document.getElementById('logPass').value;
   if (!em) return showErr('logEmailErr', 'Digite seu e-mail');
+  if (!isValidEmail(em)) return showErr('logEmailErr', 'E-mail inválido');
   if (!pw) return showErr('logPassErr', 'Digite sua senha');
   const b = document.getElementById('logBtn'); b.disabled = true; b.innerHTML = '<span class="spinner"></span> Entrando...';
   try {
@@ -69,17 +72,24 @@ async function signupStep2() {
   const nm = document.getElementById('sName').value.trim(), em = document.getElementById('sEmail').value.trim();
   const cpf = document.getElementById('sCPF').value.trim(), pw = document.getElementById('sPass').value;
   hideErr();
-  if (!nm) return toast('Preencha seu nome', 'err');
+  if (!nm || nm.length < 3) return toast('Nome deve ter ao menos 3 caracteres', 'err');
+  if (nm.length > 100) return toast('Nome muito longo', 'err');
   if (!em) return showErr('sEmailErr', 'Digite seu e-mail');
-  if (!cpf || cpf.replace(/\D/g, '').length < 11) return toast('CPF inválido', 'err');
-  if (pw.length < 6) return showErr('sPassErr', 'Mínimo 6 caracteres');
+  if (!isValidEmail(em)) return showErr('sEmailErr', 'E-mail inválido');
+  if (!cpf || cpf.replace(/\D/g, '').length !== 11) return toast('CPF inválido', 'err');
+  if (pw.length < 8) return showErr('sPassErr', 'Mínimo 8 caracteres');
+  if (!/[A-Z]/.test(pw)) return showErr('sPassErr', 'Inclua ao menos uma letra maiúscula');
+  if (!/[0-9]/.test(pw)) return showErr('sPassErr', 'Inclua ao menos um número');
+  if (!/[^A-Za-z0-9]/.test(pw)) return showErr('sPassErr', 'Inclua ao menos um caractere especial');
   const b = document.querySelector('#sS1 .btn-primary'); b.disabled = true; b.innerHTML = '<span class="spinner"></span>';
   try {
     // Send CPF to backend for validation and masking
-    const cpfRes = await fetch(API_URL + '/api/validate-cpf', {
+    const cpfResponse = await fetch(API_URL + '/api/validate-cpf', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cpf })
-    }).then(r => r.json());
+      body: JSON.stringify({ cpf: cpf.replace(/\D/g, '') })
+    });
+    if (!cpfResponse.ok) { toast('Erro ao validar CPF. Tente novamente.', 'err'); b.disabled = false; b.textContent = 'Criar conta grátis →'; return; }
+    const cpfRes = await cpfResponse.json();
     if (!cpfRes.valid) { toast('CPF inválido', 'err'); b.disabled = false; b.textContent = 'Criar conta grátis →'; return; }
     // Create Firebase account
     const c = await auth.createUserWithEmailAndPassword(em, pw);
@@ -90,10 +100,13 @@ async function signupStep2() {
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
     closeM('signupM'); toast('Conta criada! 🎉', 'ok'); updNav();
-  } catch (e) { toast(e.code === 'auth/email-already-in-use' ? 'E-mail já cadastrado' : e.message, 'err'); }
+  } catch (e) {
+    const msgs = { 'auth/email-already-in-use': 'E-mail já cadastrado', 'auth/invalid-email': 'E-mail inválido', 'auth/weak-password': 'Senha muito fraca' };
+    toast(msgs[e.code] || 'Erro ao criar conta. Tente novamente.', 'err');
+  }
   b.disabled = false; b.textContent = 'Criar conta grátis →';
 }
-async function signupSubmit() { signupStep2(); }
+async function signupSubmit() { await signupStep2(); }
 
 // === LOGOUT ===
 function logoutUser() {
