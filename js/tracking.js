@@ -104,10 +104,11 @@ async function confirmPay() {
 }
 
 // === RECOVER PENDING PAYMENT (if user closed browser and came back) ===
-let _pendingPaymentChecked = false;
 async function checkPendingPayment() {
-  if (!CU || _pendingPaymentChecked) return;
-  _pendingPaymentChecked = true;
+  if (!CU) return;
+  // Só mostra uma vez por sessão de navegador (não reabre se usuário fechou o modal)
+  if (sessionStorage.getItem('pendingChecked')) return;
+  sessionStorage.setItem('pendingChecked', '1');
   try {
     const snap = await db.collection('payments')
       .where('userId', '==', CU.uid)

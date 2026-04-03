@@ -12,9 +12,16 @@ function isValidEmail(e) {
 
 // === MODALS ===
 function openM(id) { document.getElementById(id).classList.add('show'); document.body.style.overflow = 'hidden'; }
-function closeM(id) { document.getElementById(id).classList.remove('show'); document.body.style.overflow = ''; }
+function closeM(id) {
+  document.getElementById(id).classList.remove('show'); document.body.style.overflow = '';
+  // Se o modal de rastreamento for fechado manualmente, não reabre na mesma sessão
+  if (id === 'trackM') sessionStorage.setItem('pendingChecked', '1');
+}
 document.querySelectorAll('.mo').forEach(o => o.addEventListener('click', e => {
-  if (e.target === o) { o.classList.remove('show'); document.body.style.overflow = ''; }
+  if (e.target === o) {
+    o.classList.remove('show'); document.body.style.overflow = '';
+    if (o.id === 'trackM') sessionStorage.setItem('pendingChecked', '1');
+  }
 }));
 
 // === TOAST ===
