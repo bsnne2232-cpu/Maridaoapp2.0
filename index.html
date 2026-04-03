@@ -350,9 +350,10 @@ document.addEventListener('DOMContentLoaded', () => {
   // Scroll animations
   const obs = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) e.target.classList.add('vis'); }), { threshold: .1 });
   document.querySelectorAll('.fade-in').forEach(el => obs.observe(el));
-  // Date min
-  const td = new Date().toISOString().split('T')[0];
-  document.querySelectorAll('input[type="date"]').forEach(el => el.setAttribute('min', td));
+  // Date min: mínimo amanhã (não é possível agendar para hoje)
+  const tmr = new Date(); tmr.setDate(tmr.getDate() + 1);
+  const tmrStr = tmr.toISOString().split('T')[0];
+  document.querySelectorAll('input[type="date"]').forEach(el => el.setAttribute('min', tmrStr));
   // Close dropdown on outside click
   document.addEventListener('click', e => { if (!e.target.closest('.user-area')) document.getElementById('userDd').classList.remove('show'); });
   // Check for pending payments when user is logged in

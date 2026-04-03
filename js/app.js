@@ -114,15 +114,19 @@ function toggleCarreto() {
 function searchPros() {
   const svc = document.getElementById('bkSvc').value, isC = svc === 'Carreto';
   // VALIDATION
+  const tmr = new Date(); tmr.setDate(tmr.getDate() + 1);
+  const minDate = tmr.toISOString().split('T')[0];
   if (!isC) {
     const a = document.getElementById('bkAddr').value.trim(), d = document.getElementById('bkDate').value, t = document.getElementById('bkTime').value;
     const m = []; if (!a) m.push('endereço'); if (!d) m.push('data'); if (!t) m.push('horário');
     if (m.length) { toast('Preencha: ' + m.join(', '), 'err'); return; }
+    if (d < minDate) { toast('O agendamento deve ser feito com pelo menos 1 dia de antecedência', 'err'); return; }
     window.bkDetails = { svc, addr: a, date: d, time: t, desc: document.getElementById('bkDesc').value };
   } else {
     const f = document.getElementById('cFrom').value.trim(), t = document.getElementById('cTo').value.trim(), d = document.getElementById('cDate').value, tm = document.getElementById('cTime').value;
     const m = []; if (!f) m.push('cidade de retirada'); if (!t) m.push('cidade de entrega'); if (!d) m.push('data'); if (!tm) m.push('horário');
     if (m.length) { toast('Preencha: ' + m.join(', '), 'err'); return; }
+    if (d < minDate) { toast('O agendamento deve ser feito com pelo menos 1 dia de antecedência', 'err'); return; }
     window.bkDetails = { svc, from: f, to: t, date: d, time: tm };
   }
   const pros = PDB[svc] || PDB['Faxina'];
