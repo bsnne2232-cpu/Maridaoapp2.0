@@ -95,7 +95,7 @@ function quickBook(nm) {
   if (!reqLogin()) return;
   for (const [s, ps] of Object.entries(PDB)) {
     const f = ps.find(p => p.n === nm);
-    if (f) { openChat(f, s); return; }
+    if (f) { openSvc(s); return; } // Passa pelo fluxo completo (data, endereço, etc.)
   }
 }
 
