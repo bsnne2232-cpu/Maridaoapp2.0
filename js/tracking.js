@@ -137,27 +137,28 @@ async function checkPendingPayment() {
     selSvc = data.svc;
     selPro = { n: data.pro };
 
-    openM('trackM');
-    const s = document.querySelectorAll('.trk-step');
-    s.forEach(x => { x.classList.remove('done', 'now'); x.querySelector('.trk-time').textContent = '—'; });
-    ['arrCodeSec', 'arrVerSec', 'compSec', 'doneSec'].forEach(id => document.getElementById(id).style.display = 'none');
-    document.getElementById('trkSteps').style.display = 'flex';
-
-    if (data.status === 'awaiting_arrival') {
-      s[0].classList.add('done'); s[1].classList.add('done', 'now');
-      document.getElementById('arrCode').textContent = data.arrCode;
-      document.getElementById('arrVerSec').style.display = 'block';
-      toast('Serviço pendente! Confirme a chegada.', 'inf');
-    } else if (data.status === 'in_progress') {
-      s[0].classList.add('done'); s[1].classList.add('done'); s[2].classList.add('done'); s[3].classList.add('done', 'now');
-      document.getElementById('compSec').style.display = 'block';
-      toast('Serviço em andamento! Peça o código de conclusão.', 'inf');
-    }
-
-    if (expires) {
-      const hoursLeft = Math.max(0, Math.floor((expires - now) / (1000 * 60 * 60)));
-      toast('⏰ ' + hoursLeft + 'h restantes pra confirmar', 'inf');
-    }
+    // Mostra apenas um toast discreto — usuário decide se quer abrir
+    const label = data.status === 'awaiting_arrival' ? 'Confirme a chegada' : 'Peça o código de conclusão';
+    toast('📋 Serviço pendente: ' + label + '. Toque para ver.', 'inf');
+    // Abre o modal só se o usuário clicar no toast
+    const toastEl = document.getElementById('toast');
+    toastEl.style.cursor = 'pointer';
+    toastEl.onclick = () => {
+      toastEl.style.cursor = ''; toastEl.onclick = null;
+      openM('trackM');
+      const s = document.querySelectorAll('.trk-step');
+      s.forEach(x => { x.classList.remove('done', 'now'); x.querySelector('.trk-time').textContent = '—'; });
+      ['arrCodeSec', 'arrVerSec', 'compSec', 'doneSec'].forEach(id => document.getElementById(id).style.display = 'none');
+      document.getElementById('trkSteps').style.display = 'flex';
+      if (data.status === 'awaiting_arrival') {
+        s[0].classList.add('done'); s[1].classList.add('done', 'now');
+        document.getElementById('arrCode').textContent = data.arrCode;
+        document.getElementById('arrVerSec').style.display = 'block';
+      } else if (data.status === 'in_progress') {
+        s[0].classList.add('done'); s[1].classList.add('done'); s[2].classList.add('done'); s[3].classList.add('done', 'now');
+        document.getElementById('compSec').style.display = 'block';
+      }
+    };
   } catch (e) {
     console.log('Pending check:', e.message);
   }
