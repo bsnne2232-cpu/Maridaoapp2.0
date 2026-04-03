@@ -18,7 +18,7 @@ function setupAC(iid, lid) {
     if (v.length < 2) { list.innerHTML = ''; list.style.display = 'none'; return; }
     const m = []; cNorm.forEach((n, i) => { if (n.includes(v)) m.push(cNames[i]); });
     list.innerHTML = m.slice(0, 8).map(c =>
-      `<div style="padding:8px 14px;cursor:pointer;font-size:.85rem;transition:background .2s" onmouseover="this.style.background='var(--pl)'" onmouseout="this.style.background=''" onclick="document.getElementById('${iid}').value='${c.replace(/'/g, "\\'")}';document.getElementById('${lid}').style.display='none';calcCarreto()">${c}</div>`
+      `<div style="padding:8px 14px;cursor:pointer;font-size:.85rem;transition:background .2s" onmouseover="this.style.background='var(--pl)'" onmouseout="this.style.background=''" onclick="document.getElementById('${esc(iid)}').value='${esc(c.replace(/'/g, ""))}';document.getElementById('${esc(lid)}').style.display='none';calcCarreto()">${esc(c)}</div>`
     ).join('');
     list.style.display = m.length ? 'block' : 'none';
   });

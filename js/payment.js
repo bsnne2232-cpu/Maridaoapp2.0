@@ -34,6 +34,24 @@ function openPayM(pro, svc, total) {
   openM('payM');
 }
 
+// === VALIDATE PAYMENT FORM ===
+function validateAndPay() {
+  if (payMethod === 'card') {
+    const num = (document.getElementById('cardNum').value || '').replace(/\D/g, '');
+    const exp = (document.getElementById('cardExp').value || '').trim();
+    const cvv = (document.getElementById('cardCvv').value || '').replace(/\D/g, '');
+    if (num.length < 13 || num.length > 16) return toast('Número do cartão inválido', 'err');
+    if (!/^\d{2}\/\d{2}$/.test(exp)) return toast('Validade inválida (MM/AA)', 'err');
+    const [mm, yy] = exp.split('/').map(Number);
+    if (mm < 1 || mm > 12) return toast('Mês inválido', 'err');
+    const now = new Date();
+    const expDate = new Date(2000 + yy, mm);
+    if (expDate <= now) return toast('Cartão vencido', 'err');
+    if (cvv.length < 3) return toast('CVV inválido', 'err');
+  }
+  confirmPay();
+}
+
 // === SELECT PAYMENT METHOD ===
 function selPay(m, el) {
   payMethod = m;

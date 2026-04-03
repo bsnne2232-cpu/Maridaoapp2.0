@@ -1,3 +1,15 @@
+// === SANITIZE HTML (prevent XSS) ===
+function esc(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+// === VALIDATE EMAIL ===
+function isValidEmail(e) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e);
+}
+
 // === MODALS ===
 function openM(id) { document.getElementById(id).classList.add('show'); document.body.style.overflow = 'hidden'; }
 function closeM(id) { document.getElementById(id).classList.remove('show'); document.body.style.overflow = ''; }
@@ -33,11 +45,33 @@ function copyTxt(id, btn) {
   setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('ok'); }, 2000);
 }
 
-// === CPF MASK (global input listener) ===
+// === INPUT MASKS (global input listener) ===
 document.addEventListener('input', e => {
+  // CPF mask
   if (e.target.id === 'proCpf' || e.target.id === 'sCPF' || e.target.id === 'dCPF') {
     let v = e.target.value.replace(/\D/g, ''); if (v.length > 11) v = v.slice(0, 11);
     v = v.replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+    e.target.value = v;
+  }
+  // Card number mask (0000 0000 0000 0000)
+  if (e.target.id === 'cardNum') {
+    let v = e.target.value.replace(/\D/g, ''); if (v.length > 16) v = v.slice(0, 16);
+    e.target.value = v.replace(/(\d{4})(?=\d)/g, '$1 ');
+  }
+  // Card expiry mask (MM/AA)
+  if (e.target.id === 'cardExp') {
+    let v = e.target.value.replace(/\D/g, ''); if (v.length > 4) v = v.slice(0, 4);
+    if (v.length >= 2) v = v.slice(0, 2) + '/' + v.slice(2);
+    e.target.value = v;
+  }
+  // CVV - digits only
+  if (e.target.id === 'cardCvv') {
+    e.target.value = e.target.value.replace(/\D/g, '').slice(0, 4);
+  }
+  // CEP mask
+  if (e.target.id === 'proCep') {
+    let v = e.target.value.replace(/\D/g, ''); if (v.length > 8) v = v.slice(0, 8);
+    if (v.length > 5) v = v.slice(0, 5) + '-' + v.slice(5);
     e.target.value = v;
   }
 });

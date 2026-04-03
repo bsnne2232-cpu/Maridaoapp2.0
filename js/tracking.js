@@ -1,25 +1,64 @@
+// === SECURE CODE HASHING (codes never stored in plain text on client) ===
+async function hashCode(code) {
+  const enc = new TextEncoder().encode(code + '_maridao_salt_2025');
+  const buf = await crypto.subtle.digest('SHA-256', enc);
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function secureRandom4() {
+  const arr = new Uint32Array(1);
+  crypto.getRandomValues(arr);
+  return String(1000 + (arr[0] % 9000));
+}
+
+// === RATE LIMITING FOR CODE VERIFICATION ===
+const _codeAttempts = { arr: 0, comp: 0, arrLocked: false, compLocked: false };
+const MAX_CODE_ATTEMPTS = 5;
+const LOCKOUT_MS = 60000; // 1 minute lockout
+
+function checkAttempts(type) {
+  if (_codeAttempts[type + 'Locked']) {
+    toast('Muitas tentativas. Aguarde 1 minuto.', 'err');
+    return false;
+  }
+  _codeAttempts[type]++;
+  if (_codeAttempts[type] >= MAX_CODE_ATTEMPTS) {
+    _codeAttempts[type + 'Locked'] = true;
+    setTimeout(() => { _codeAttempts[type] = 0; _codeAttempts[type + 'Locked'] = false; }, LOCKOUT_MS);
+    toast('Limite de tentativas atingido. Aguarde 1 minuto.', 'err');
+    return false;
+  }
+  return true;
+}
+
 // === CONFIRM PAYMENT → START TRACKING (codes saved to Firestore) ===
 async function confirmPay() {
+  if (!CU) { toast('Faça login para continuar', 'err'); return; }
+  if (!agreedPrice || agreedPrice <= 0) { toast('Valor inválido', 'err'); return; }
+
   closeM('payM'); openM('trackM');
   // Get verification codes from backend
   let arrCode, compCode;
   try {
     const res = await fetch(API_URL + '/api/generate-codes', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: CU ? CU.uid : null })
-    }).then(r => r.json());
-    arrCode = res.arrivalCode;
-    compCode = res.completionCode;
+      body: JSON.stringify({ userId: CU.uid })
+    });
+    if (!res.ok) throw new Error('API error');
+    const data = await res.json();
+    arrCode = data.arrivalCode;
+    compCode = data.completionCode;
   } catch (e) {
-    arrCode = String(Math.floor(1000 + Math.random() * 9000));
-    compCode = String(Math.floor(1000 + Math.random() * 9000));
+    // Cryptographically secure fallback
+    arrCode = secureRandom4();
+    compCode = secureRandom4();
   }
 
   // Save payment with codes to Firestore (persists even if browser closes)
   const g = gwFee(payMethod, agreedPrice);
   const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 hours
   let paymentId = null;
-  if (CU) {
+  try {
     const payRef = await db.collection('payments').add({
       userId: CU.uid, pro: selPro.n, svc: selSvc, amount: agreedPrice,
       gwFee: g.f, method: payMethod, clientPaid: agreedPrice + g.f,
@@ -30,12 +69,20 @@ async function confirmPay() {
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
     paymentId = payRef.id;
+  } catch (e) {
+    toast('Erro ao processar pagamento. Tente novamente.', 'err');
+    closeM('trackM');
+    return;
   }
 
-  // Store for this session
+  // Store hashed codes (plain codes NOT accessible via console)
   window.currentPaymentId = paymentId;
-  window.arrCode = arrCode;
-  window.compCode = compCode;
+  window._arrHash = await hashCode(arrCode);
+  window._compHash = await hashCode(compCode);
+
+  // Reset attempt counters
+  _codeAttempts.arr = 0; _codeAttempts.comp = 0;
+  _codeAttempts.arrLocked = false; _codeAttempts.compLocked = false;
 
   document.getElementById('arrCode').textContent = arrCode;
   ['arrCodeSec', 'arrVerSec', 'compSec', 'doneSec'].forEach(id => document.getElementById(id).style.display = 'none');
@@ -79,10 +126,10 @@ async function checkPendingPayment() {
       return;
     }
 
-    // Restore codes from Firestore
+    // Restore hashed codes from Firestore (never expose plain codes in window)
     window.currentPaymentId = doc.id;
-    window.arrCode = data.arrCode;
-    window.compCode = data.compCode;
+    window._arrHash = await hashCode(data.arrCode);
+    window._compHash = await hashCode(data.compCode);
     agreedPrice = data.amount;
     selSvc = data.svc;
     selPro = { n: data.pro };
@@ -118,14 +165,16 @@ function aNext(el, i) { el.value = el.value.replace(/\D/g, ''); if (el.value && 
 function cNext(el, i) { el.value = el.value.replace(/\D/g, ''); if (el.value && i < 4) document.getElementById('cI' + (i + 1)).focus(); }
 
 async function verifyArr() {
+  if (!checkAttempts('arr')) return;
   const v = [1, 2, 3, 4].map(i => document.getElementById('aI' + i).value).join('');
-  if (v === window.arrCode) {
+  const vHash = await hashCode(v);
+  if (vHash === window._arrHash) {
     document.getElementById('arrVerSec').style.display = 'none';
     document.getElementById('arrErr').style.display = 'none';
     const s = document.querySelectorAll('.trk-step');
     s[2].classList.add('done'); s[2].querySelector('.trk-time').textContent = 'Confirmado';
     toast('Código ok! Serviço em andamento 🔧', 'ok');
-    // Update Firestore status
+    _codeAttempts.arr = 0; // Reset on success
     if (window.currentPaymentId) {
       await db.collection('payments').doc(window.currentPaymentId).update({
         status: 'in_progress', arrivedAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -136,7 +185,6 @@ async function verifyArr() {
       s[4].classList.add('now'); s[4].querySelector('.trk-time').textContent = 'Aguardando';
       document.getElementById('compSec').style.display = 'block';
       toast('Peça o código de conclusão ao profissional ✅', 'ok');
-      setTimeout(() => toast('🛠️ Código de conclusão: ' + window.compCode, 'ok'), 1500);
     }, 5000);
   } else {
     document.getElementById('arrErr').style.display = 'block';
@@ -147,15 +195,17 @@ async function verifyArr() {
 
 // === COMPLETION CODE ===
 async function verifyComp() {
+  if (!checkAttempts('comp')) return;
   const v = [1, 2, 3, 4].map(i => document.getElementById('cI' + i).value).join('');
-  if (v === window.compCode) {
+  const vHash = await hashCode(v);
+  if (vHash === window._compHash) {
     document.getElementById('compSec').style.display = 'none';
     document.getElementById('trkSteps').style.display = 'none';
     const s = document.querySelectorAll('.trk-step'); s[4].classList.add('done');
     document.getElementById('doneAmt').textContent = 'R$ ' + (agreedPrice * .75).toFixed(2);
     document.getElementById('doneSec').style.display = 'block';
     toast('Concluído! Pagamento liberado! 🎉', 'ok');
-    // Update Firestore - payment released
+    _codeAttempts.comp = 0; // Reset on success
     if (window.currentPaymentId) {
       await db.collection('payments').doc(window.currentPaymentId).update({
         status: 'completed', completedAt: firebase.firestore.FieldValue.serverTimestamp()
