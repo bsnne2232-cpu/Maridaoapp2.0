@@ -350,9 +350,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // Scroll animations
   const obs = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) e.target.classList.add('vis'); }), { threshold: .1 });
   document.querySelectorAll('.fade-in').forEach(el => obs.observe(el));
-  // Date min: mínimo amanhã (não é possível agendar para hoje)
+  // Date min: mínimo amanhã usando data local (evita bug de fuso horário UTC)
   const tmr = new Date(); tmr.setDate(tmr.getDate() + 1);
-  const tmrStr = tmr.toISOString().split('T')[0];
+  const tmrStr = tmr.getFullYear() + '-' + String(tmr.getMonth()+1).padStart(2,'0') + '-' + String(tmr.getDate()).padStart(2,'0');
   document.querySelectorAll('input[type="date"]').forEach(el => el.setAttribute('min', tmrStr));
   // Close dropdown on outside click
   document.addEventListener('click', e => { if (!e.target.closest('.user-area')) document.getElementById('userDd').classList.remove('show'); });

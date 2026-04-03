@@ -115,7 +115,7 @@ function searchPros() {
   const svc = document.getElementById('bkSvc').value, isC = svc === 'Carreto';
   // VALIDATION
   const tmr = new Date(); tmr.setDate(tmr.getDate() + 1);
-  const minDate = tmr.toISOString().split('T')[0];
+  const minDate = tmr.getFullYear() + '-' + String(tmr.getMonth()+1).padStart(2,'0') + '-' + String(tmr.getDate()).padStart(2,'0');
   if (!isC) {
     const a = document.getElementById('bkAddr').value.trim(), d = document.getElementById('bkDate').value, t = document.getElementById('bkTime').value;
     const m = []; if (!a) m.push('endereço'); if (!d) m.push('data'); if (!t) m.push('horário');

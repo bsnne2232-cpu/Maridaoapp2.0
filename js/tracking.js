@@ -104,8 +104,10 @@ async function confirmPay() {
 }
 
 // === RECOVER PENDING PAYMENT (if user closed browser and came back) ===
+let _pendingPaymentChecked = false;
 async function checkPendingPayment() {
-  if (!CU) return;
+  if (!CU || _pendingPaymentChecked) return;
+  _pendingPaymentChecked = true;
   try {
     const snap = await db.collection('payments')
       .where('userId', '==', CU.uid)
