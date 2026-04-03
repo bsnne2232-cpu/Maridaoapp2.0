@@ -110,7 +110,9 @@ async function signupSubmit() { await signupStep2(); }
 
 // === LOGOUT ===
 function logoutUser() {
-  auth.signOut(); toast('Saiu da conta', 'ok');
+  auth.signOut();
+  _pendingPaymentChecked = false;
+  toast('Saiu da conta', 'ok');
   document.getElementById('userDd').classList.remove('show');
 }
 
