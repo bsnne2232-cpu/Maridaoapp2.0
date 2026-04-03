@@ -111,7 +111,7 @@ async function signupSubmit() { await signupStep2(); }
 // === LOGOUT ===
 function logoutUser() {
   auth.signOut();
-  _pendingPaymentChecked = false;
+  sessionStorage.removeItem('pendingChecked');
   toast('Saiu da conta', 'ok');
   document.getElementById('userDd').classList.remove('show');
 }
