@@ -111,22 +111,51 @@ function toggleCarreto() {
   document.getElementById('carretoF').style.display = c ? 'block' : 'none';
 }
 
+function parseYMDToLocalDate(ymd) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return null;
+  const [y, m, d] = ymd.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  if (dt.getFullYear() !== y || dt.getMonth() !== (m - 1) || dt.getDate() !== d) return null;
+  dt.setHours(0, 0, 0, 0);
+  return dt;
+}
+
+function validateScheduleDate(ymd) {
+  const selected = parseYMDToLocalDate(ymd);
+  if (!selected) return { ok: false, msg: 'Data inválida' };
+
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  // Regra solicitada: permitir somente hoje ou amanhã.
+  // Bloqueia datas passadas e datas a partir de depois de amanhã.
+  if (selected < today) {
+    return { ok: false, msg: 'Não é permitido agendar para datas passadas' };
+  }
+  if (selected > tomorrow) {
+    return { ok: false, msg: 'Só é permitido agendar para hoje ou amanhã' };
+  }
+
+  return { ok: true };
+}
+
 function searchPros() {
   const svc = document.getElementById('bkSvc').value, isC = svc === 'Carreto';
-  // VALIDATION
-  const tmr = new Date(); tmr.setDate(tmr.getDate() + 1);
-  const minDate = tmr.getFullYear() + '-' + String(tmr.getMonth()+1).padStart(2,'0') + '-' + String(tmr.getDate()).padStart(2,'0');
   if (!isC) {
     const a = document.getElementById('bkAddr').value.trim(), d = document.getElementById('bkDate').value, t = document.getElementById('bkTime').value;
     const m = []; if (!a) m.push('endereço'); if (!d) m.push('data'); if (!t) m.push('horário');
     if (m.length) { toast('Preencha: ' + m.join(', '), 'err'); return; }
-    if (d < minDate) { toast('O agendamento deve ser feito com pelo menos 1 dia de antecedência', 'err'); return; }
+    const dateCheck = validateScheduleDate(d);
+    if (!dateCheck.ok) { toast(dateCheck.msg, 'err'); return; }
     window.bkDetails = { svc, addr: a, date: d, time: t, desc: document.getElementById('bkDesc').value };
   } else {
     const f = document.getElementById('cFrom').value.trim(), t = document.getElementById('cTo').value.trim(), d = document.getElementById('cDate').value, tm = document.getElementById('cTime').value;
     const m = []; if (!f) m.push('cidade de retirada'); if (!t) m.push('cidade de entrega'); if (!d) m.push('data'); if (!tm) m.push('horário');
     if (m.length) { toast('Preencha: ' + m.join(', '), 'err'); return; }
-    if (d < minDate) { toast('O agendamento deve ser feito com pelo menos 1 dia de antecedência', 'err'); return; }
+    const dateCheck = validateScheduleDate(d);
+    if (!dateCheck.ok) { toast(dateCheck.msg, 'err'); return; }
     window.bkDetails = { svc, from: f, to: t, date: d, time: tm };
   }
   const pros = PDB[svc] || PDB['Faxina'];

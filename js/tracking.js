@@ -12,6 +12,7 @@ function secureRandom4() {
 }
 
 // === RATE LIMITING FOR CODE VERIFICATION ===
+const trackingState = { currentPaymentId: null, arrHash: null, compHash: null };
 const _codeAttempts = { arr: 0, comp: 0, arrLocked: false, compLocked: false };
 const MAX_CODE_ATTEMPTS = 5;
 const LOCKOUT_MS = 60000; // 1 minute lockout
@@ -40,14 +41,16 @@ async function confirmPay() {
   // Get verification codes from backend
   let arrCode, compCode;
   try {
-    const res = await fetch(API_URL + '/api/generate-codes', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+    const res = await safeFetch(API_URL + '/api/generate-codes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId: CU.uid })
-    });
+    }, 12000);
     if (!res.ok) throw new Error('API error');
     const data = await res.json();
-    arrCode = data.arrivalCode;
-    compCode = data.completionCode;
+    arrCode = String(data.arrivalCode || '');
+    compCode = String(data.completionCode || '');
+    if (!/^\d{4}$/.test(arrCode) || !/^\d{4}$/.test(compCode)) throw new Error('Invalid codes');
   } catch (e) {
     // Cryptographically secure fallback
     arrCode = secureRandom4();
@@ -63,7 +66,6 @@ async function confirmPay() {
       userId: CU.uid, pro: selPro.n, svc: selSvc, amount: agreedPrice,
       gwFee: g.f, method: payMethod, clientPaid: agreedPrice + g.f,
       comm: agreedPrice * .25, proNet: agreedPrice * .75,
-      arrCode: arrCode, compCode: compCode,
       status: 'awaiting_arrival',
       expiresAt: firebase.firestore.Timestamp.fromDate(expiresAt),
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -75,10 +77,10 @@ async function confirmPay() {
     return;
   }
 
-  // Store hashed codes (plain codes NOT accessible via console)
-  window.currentPaymentId = paymentId;
-  window._arrHash = await hashCode(arrCode);
-  window._compHash = await hashCode(compCode);
+  // Store hashed codes in module scope (avoid window exposure)
+  trackingState.currentPaymentId = paymentId;
+  trackingState.arrHash = await hashCode(arrCode);
+  trackingState.compHash = await hashCode(compCode);
 
   // Reset attempt counters
   _codeAttempts.arr = 0; _codeAttempts.comp = 0;
@@ -129,10 +131,10 @@ async function checkPendingPayment() {
       return;
     }
 
-    // Restore hashed codes from Firestore (never expose plain codes in window)
-    window.currentPaymentId = doc.id;
-    window._arrHash = await hashCode(data.arrCode);
-    window._compHash = await hashCode(data.compCode);
+    // Codes are intentionally not persisted in Firestore anymore
+    trackingState.currentPaymentId = doc.id;
+    trackingState.arrHash = null;
+    trackingState.compHash = null;
     agreedPrice = data.amount;
     selSvc = data.svc;
     selPro = { n: data.pro };
@@ -152,8 +154,9 @@ async function checkPendingPayment() {
       document.getElementById('trkSteps').style.display = 'flex';
       if (data.status === 'awaiting_arrival') {
         s[0].classList.add('done'); s[1].classList.add('done', 'now');
-        document.getElementById('arrCode').textContent = data.arrCode;
-        document.getElementById('arrVerSec').style.display = 'block';
+        document.getElementById('arrCode').textContent = 'Código disponível apenas no momento da confirmação';
+        document.getElementById('arrVerSec').style.display = 'none';
+        toast('Por segurança, gere um novo pagamento para emitir novos códigos.', 'inf');
       } else if (data.status === 'in_progress') {
         s[0].classList.add('done'); s[1].classList.add('done'); s[2].classList.add('done'); s[3].classList.add('done', 'now');
         document.getElementById('compSec').style.display = 'block';
@@ -172,15 +175,19 @@ async function verifyArr() {
   if (!checkAttempts('arr')) return;
   const v = [1, 2, 3, 4].map(i => document.getElementById('aI' + i).value).join('');
   const vHash = await hashCode(v);
-  if (vHash === window._arrHash) {
+  if (!trackingState.arrHash) {
+    toast('Código não disponível nesta sessão. Inicie um novo fluxo de pagamento.', 'err');
+    return;
+  }
+  if (vHash === trackingState.arrHash) {
     document.getElementById('arrVerSec').style.display = 'none';
     document.getElementById('arrErr').style.display = 'none';
     const s = document.querySelectorAll('.trk-step');
     s[2].classList.add('done'); s[2].querySelector('.trk-time').textContent = 'Confirmado';
     toast('Código ok! Serviço em andamento 🔧', 'ok');
     _codeAttempts.arr = 0; // Reset on success
-    if (window.currentPaymentId) {
-      await db.collection('payments').doc(window.currentPaymentId).update({
+    if (trackingState.currentPaymentId) {
+      await db.collection('payments').doc(trackingState.currentPaymentId).update({
         status: 'in_progress', arrivedAt: firebase.firestore.FieldValue.serverTimestamp()
       });
     }
@@ -202,7 +209,11 @@ async function verifyComp() {
   if (!checkAttempts('comp')) return;
   const v = [1, 2, 3, 4].map(i => document.getElementById('cI' + i).value).join('');
   const vHash = await hashCode(v);
-  if (vHash === window._compHash) {
+  if (!trackingState.compHash) {
+    toast('Código não disponível nesta sessão. Inicie um novo fluxo de pagamento.', 'err');
+    return;
+  }
+  if (vHash === trackingState.compHash) {
     document.getElementById('compSec').style.display = 'none';
     document.getElementById('trkSteps').style.display = 'none';
     const s = document.querySelectorAll('.trk-step'); s[4].classList.add('done');
@@ -210,8 +221,8 @@ async function verifyComp() {
     document.getElementById('doneSec').style.display = 'block';
     toast('Concluído! Pagamento liberado! 🎉', 'ok');
     _codeAttempts.comp = 0; // Reset on success
-    if (window.currentPaymentId) {
-      await db.collection('payments').doc(window.currentPaymentId).update({
+    if (trackingState.currentPaymentId) {
+      await db.collection('payments').doc(trackingState.currentPaymentId).update({
         status: 'completed', completedAt: firebase.firestore.FieldValue.serverTimestamp()
       });
     }

@@ -1,0 +1,5 @@
+- [ ] Endurecer validação de data/agendamento para regra de 1 dia com timezone consistente (`js/app.js`)
+- [ ] Endurecer segurança de autenticação/chamadas backend (`js/firebase.js`)
+- [ ] Remover exposição de códigos sensíveis e melhorar fluxo de tracking (`js/tracking.js`)
+- [ ] Executar revisão final de segurança por busca no código
+- [ ] Rodar testes/comandos de validação do projeto sem erros
