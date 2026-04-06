@@ -10,6 +10,39 @@ firebase.initializeApp({
 const auth = firebase.auth(), db = firebase.firestore();
 const API_URL = 'https://maridaoapi.bsnne2232.workers.dev';
 
+async function getAuthHeaders(baseHeaders = {}) {
+  const headers = { ...baseHeaders };
+  if (CU) {
+    try {
+      const idToken = await CU.getIdToken(true);
+      headers.Authorization = 'Bearer ' + idToken;
+    } catch (_) {
+      // If token retrieval fails, request will proceed without Authorization and fail on backend protected routes
+    }
+  }
+  return headers;
+}
+
+async function safeFetch(url, options = {}, timeoutMs = 10000) {
+  const ctrl = new AbortController();
+  const id = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const baseHeaders = options.headers || {};
+    const authHeaders = await getAuthHeaders(baseHeaders);
+    const merged = {
+      method: 'GET',
+      credentials: 'omit',
+      referrerPolicy: 'no-referrer',
+      ...options,
+      headers: authHeaders,
+      signal: ctrl.signal
+    };
+    return await fetch(url, merged);
+  } finally {
+    clearTimeout(id);
+  }
+}
+
 // === STATE ===
 let CU = null, selPro = null, selSvc = '', agreedPrice = 0, payMethod = 'card';
 let chatSt = { msgs: 0, details: { what: false, where: false, when: false }, agreed: false, price: 0 };
@@ -84,10 +117,18 @@ async function signupStep2() {
   const b = document.querySelector('#sS1 .btn-primary'); b.disabled = true; b.innerHTML = '<span class="spinner"></span>';
   try {
     // Send CPF to backend for validation and masking
-    const cpfResponse = await fetch(API_URL + '/api/validate-cpf', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cpf: cpf.replace(/\D/g, '') })
-    });
+    let cpfResponse;
+    try {
+      cpfResponse = await safeFetch(API_URL + '/api/validate-cpf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cpf: cpf.replace(/\D/g, '') })
+      }, 10000);
+    } catch (e) {
+      toast('Falha de conexão ao validar CPF. Tente novamente.', 'err');
+      b.disabled = false; b.textContent = 'Criar conta grátis →';
+      return;
+    }
     if (!cpfResponse.ok) { toast('Erro ao validar CPF. Tente novamente.', 'err'); b.disabled = false; b.textContent = 'Criar conta grátis →'; return; }
     const cpfRes = await cpfResponse.json();
     if (!cpfRes.valid) { toast('CPF inválido', 'err'); b.disabled = false; b.textContent = 'Criar conta grátis →'; return; }
