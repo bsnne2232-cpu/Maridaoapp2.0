@@ -32,57 +32,51 @@ function checkAttempts(type) {
   return true;
 }
 
-// === CONFIRM PAYMENT → START TRACKING (codes saved to Firestore) ===
+// === CONFIRM PAYMENT → START TRACKING (backend required, no insecure fallback) ===
 async function confirmPay() {
   if (!CU) { toast('Faça login para continuar', 'err'); return; }
   if (!agreedPrice || agreedPrice <= 0) { toast('Valor inválido', 'err'); return; }
 
   closeM('payM'); openM('trackM');
-  // Get verification codes from backend
-  let arrCode, compCode;
+
+  let arrCode = null, compCode = null;
+  let paymentId = null;
+
   try {
-    const res = await safeFetch(API_URL + '/api/generate-codes', {
+    const g = gwFee(payMethod, agreedPrice);
+    const res = await safeFetch(API_URL + '/api/create-payment-intent', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: CU.uid })
+      body: JSON.stringify({
+        userId: CU.uid,
+        pro: selPro && selPro.n ? selPro.n : '',
+        svc: selSvc || '',
+        amount: agreedPrice,
+        payMethod,
+        gwFee: g.f
+      })
     }, 12000);
-    if (!res.ok) throw new Error('API error');
+
+    if (!res.ok) throw new Error('create-payment-intent failed');
     const data = await res.json();
+
     arrCode = String(data.arrivalCode || '');
     compCode = String(data.completionCode || '');
-    if (!/^\d{4}$/.test(arrCode) || !/^\d{4}$/.test(compCode)) throw new Error('Invalid codes');
-  } catch (e) {
-    // Cryptographically secure fallback
-    arrCode = secureRandom4();
-    compCode = secureRandom4();
-  }
+    paymentId = String(data.paymentId || '');
 
-  // Save payment with codes to Firestore (persists even if browser closes)
-  const g = gwFee(payMethod, agreedPrice);
-  const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 hours
-  let paymentId = null;
-  try {
-    const payRef = await db.collection('payments').add({
-      userId: CU.uid, pro: selPro.n, svc: selSvc, amount: agreedPrice,
-      gwFee: g.f, method: payMethod, clientPaid: agreedPrice + g.f,
-      comm: agreedPrice * .25, proNet: agreedPrice * .75,
-      status: 'awaiting_arrival',
-      expiresAt: firebase.firestore.Timestamp.fromDate(expiresAt),
-      createdAt: firebase.firestore.FieldValue.serverTimestamp()
-    });
-    paymentId = payRef.id;
+    if (!/^\d{4}$/.test(arrCode) || !/^\d{4}$/.test(compCode) || !paymentId) {
+      throw new Error('invalid backend payment payload');
+    }
   } catch (e) {
-    toast('Erro ao processar pagamento. Tente novamente.', 'err');
+    toast('Falha de segurança ao iniciar pagamento. Tente novamente.', 'err');
     closeM('trackM');
     return;
   }
 
-  // Store hashed codes in module scope (avoid window exposure)
   trackingState.currentPaymentId = paymentId;
   trackingState.arrHash = await hashCode(arrCode);
   trackingState.compHash = await hashCode(compCode);
 
-  // Reset attempt counters
   _codeAttempts.arr = 0; _codeAttempts.comp = 0;
   _codeAttempts.arrLocked = false; _codeAttempts.compLocked = false;
 
@@ -112,27 +106,31 @@ async function checkPendingPayment() {
   if (sessionStorage.getItem('pendingChecked')) return;
   sessionStorage.setItem('pendingChecked', '1');
   try {
-    const snap = await db.collection('payments')
-      .where('userId', '==', CU.uid)
-      .where('status', 'in', ['awaiting_arrival', 'in_progress'])
-      .limit(1)
-      .get();
-    if (snap.empty) return;
+    const res = await safeFetch(API_URL + '/api/get-pending-payment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: CU.uid })
+    }, 10000);
 
-    const doc = snap.docs[0];
-    const data = doc.data();
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data || !data.paymentId || !data.status) return;
 
     // Check if expired (48h)
     const now = new Date();
-    const expires = data.expiresAt ? data.expiresAt.toDate() : null;
+    const expires = data.expiresAt ? new Date(data.expiresAt) : null;
     if (expires && now > expires) {
-      await doc.ref.update({ status: 'auto_completed', completedAt: firebase.firestore.FieldValue.serverTimestamp() });
+      await safeFetch(API_URL + '/api/mark-payment-expired', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paymentId: data.paymentId })
+      }, 10000);
       toast('Serviço anterior concluído automaticamente (48h)', 'inf');
       return;
     }
 
     // Codes are intentionally not persisted in Firestore anymore
-    trackingState.currentPaymentId = doc.id;
+    trackingState.currentPaymentId = data.paymentId;
     trackingState.arrHash = null;
     trackingState.compHash = null;
     agreedPrice = data.amount;
@@ -187,9 +185,11 @@ async function verifyArr() {
     toast('Código ok! Serviço em andamento 🔧', 'ok');
     _codeAttempts.arr = 0; // Reset on success
     if (trackingState.currentPaymentId) {
-      await db.collection('payments').doc(trackingState.currentPaymentId).update({
-        status: 'in_progress', arrivedAt: firebase.firestore.FieldValue.serverTimestamp()
-      });
+      await safeFetch(API_URL + '/api/mark-arrival-confirmed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paymentId: trackingState.currentPaymentId })
+      }, 10000);
     }
     setTimeout(() => { s[3].classList.add('done', 'now'); s[3].querySelector('.trk-time').textContent = 'Agora'; }, 2000);
     setTimeout(() => {
@@ -222,9 +222,11 @@ async function verifyComp() {
     toast('Concluído! Pagamento liberado! 🎉', 'ok');
     _codeAttempts.comp = 0; // Reset on success
     if (trackingState.currentPaymentId) {
-      await db.collection('payments').doc(trackingState.currentPaymentId).update({
-        status: 'completed', completedAt: firebase.firestore.FieldValue.serverTimestamp()
-      });
+      await safeFetch(API_URL + '/api/mark-service-completed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paymentId: trackingState.currentPaymentId })
+      }, 10000);
     }
   } else {
     document.getElementById('compErr').style.display = 'block';
