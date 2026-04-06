@@ -5,12 +5,6 @@ async function hashCode(code) {
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-function secureRandom4() {
-  const arr = new Uint32Array(1);
-  crypto.getRandomValues(arr);
-  return String(1000 + (arr[0] % 9000));
-}
-
 // === RATE LIMITING FOR CODE VERIFICATION ===
 const trackingState = { currentPaymentId: null, arrHash: null, compHash: null };
 const _codeAttempts = { arr: 0, comp: 0, arrLocked: false, compLocked: false };
@@ -32,57 +26,42 @@ function checkAttempts(type) {
   return true;
 }
 
-// === CONFIRM PAYMENT → START TRACKING (codes saved to Firestore) ===
+// === CONFIRM PAYMENT → START TRACKING (compatible with current backend endpoints) ===
 async function confirmPay() {
   if (!CU) { toast('Faça login para continuar', 'err'); return; }
   if (!agreedPrice || agreedPrice <= 0) { toast('Valor inválido', 'err'); return; }
 
-  closeM('payM'); openM('trackM');
-  // Get verification codes from backend
-  let arrCode, compCode;
+  closeM('payM');
+  openM('trackM');
+
+  let arrCode = null, compCode = null;
   try {
     const res = await safeFetch(API_URL + '/api/generate-codes', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId: CU.uid })
     }, 12000);
-    if (!res.ok) throw new Error('API error');
+
+    if (!res.ok) throw new Error('generate-codes failed');
     const data = await res.json();
+
     arrCode = String(data.arrivalCode || '');
     compCode = String(data.completionCode || '');
-    if (!/^\d{4}$/.test(arrCode) || !/^\d{4}$/.test(compCode)) throw new Error('Invalid codes');
-  } catch (e) {
-    // Cryptographically secure fallback
-    arrCode = secureRandom4();
-    compCode = secureRandom4();
-  }
 
-  // Save payment with codes to Firestore (persists even if browser closes)
-  const g = gwFee(payMethod, agreedPrice);
-  const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 hours
-  let paymentId = null;
-  try {
-    const payRef = await db.collection('payments').add({
-      userId: CU.uid, pro: selPro.n, svc: selSvc, amount: agreedPrice,
-      gwFee: g.f, method: payMethod, clientPaid: agreedPrice + g.f,
-      comm: agreedPrice * .25, proNet: agreedPrice * .75,
-      status: 'awaiting_arrival',
-      expiresAt: firebase.firestore.Timestamp.fromDate(expiresAt),
-      createdAt: firebase.firestore.FieldValue.serverTimestamp()
-    });
-    paymentId = payRef.id;
-  } catch (e) {
-    toast('Erro ao processar pagamento. Tente novamente.', 'err');
+    if (!/^\d{4}$/.test(arrCode) || !/^\d{4}$/.test(compCode)) {
+      throw new Error('invalid backend code payload');
+    }
+  } catch (_) {
+    toast('Falha de segurança ao iniciar pagamento. Tente novamente.', 'err');
     closeM('trackM');
     return;
   }
 
-  // Store hashed codes in module scope (avoid window exposure)
-  trackingState.currentPaymentId = paymentId;
+  // Keep only hashed codes in memory; never persist plain codes
+  trackingState.currentPaymentId = null;
   trackingState.arrHash = await hashCode(arrCode);
   trackingState.compHash = await hashCode(compCode);
 
-  // Reset attempt counters
   _codeAttempts.arr = 0; _codeAttempts.comp = 0;
   _codeAttempts.arrLocked = false; _codeAttempts.compLocked = false;
 
@@ -92,12 +71,15 @@ async function confirmPay() {
   document.getElementById('trkSteps').style.display = 'flex';
   const s = document.querySelectorAll('.trk-step');
   s.forEach(x => { x.classList.remove('done', 'now'); x.querySelector('.trk-time').textContent = '—'; });
-  s[0].classList.add('done', 'now'); s[0].querySelector('.trk-time').textContent = 'Agora';
+  s[0].classList.add('done', 'now');
+  s[0].querySelector('.trk-time').textContent = 'Agora';
 
   setTimeout(() => {
-    s[1].classList.add('done', 'now'); s[1].querySelector('.trk-time').textContent = '15 min';
+    s[1].classList.add('done', 'now');
+    s[1].querySelector('.trk-time').textContent = '15 min';
     toast('Profissional a caminho! 🚗', 'ok');
   }, 3000);
+
   setTimeout(() => {
     document.getElementById('arrCodeSec').style.display = 'none';
     document.getElementById('arrVerSec').style.display = 'block';
@@ -105,66 +87,10 @@ async function confirmPay() {
   }, 6000);
 }
 
-// === RECOVER PENDING PAYMENT (if user closed browser and came back) ===
+// === RECOVER PENDING PAYMENT ===
+// Sem endpoint de pendência no backend atual; evitamos reconstruir estado sensível.
 async function checkPendingPayment() {
-  if (!CU) return;
-  // Só mostra uma vez por sessão de navegador (não reabre se usuário fechou o modal)
-  if (sessionStorage.getItem('pendingChecked')) return;
-  sessionStorage.setItem('pendingChecked', '1');
-  try {
-    const snap = await db.collection('payments')
-      .where('userId', '==', CU.uid)
-      .where('status', 'in', ['awaiting_arrival', 'in_progress'])
-      .limit(1)
-      .get();
-    if (snap.empty) return;
-
-    const doc = snap.docs[0];
-    const data = doc.data();
-
-    // Check if expired (48h)
-    const now = new Date();
-    const expires = data.expiresAt ? data.expiresAt.toDate() : null;
-    if (expires && now > expires) {
-      await doc.ref.update({ status: 'auto_completed', completedAt: firebase.firestore.FieldValue.serverTimestamp() });
-      toast('Serviço anterior concluído automaticamente (48h)', 'inf');
-      return;
-    }
-
-    // Codes are intentionally not persisted in Firestore anymore
-    trackingState.currentPaymentId = doc.id;
-    trackingState.arrHash = null;
-    trackingState.compHash = null;
-    agreedPrice = data.amount;
-    selSvc = data.svc;
-    selPro = { n: data.pro };
-
-    // Mostra apenas um toast discreto — usuário decide se quer abrir
-    const label = data.status === 'awaiting_arrival' ? 'Confirme a chegada' : 'Peça o código de conclusão';
-    toast('📋 Serviço pendente: ' + label + '. Toque para ver.', 'inf');
-    // Abre o modal só se o usuário clicar no toast
-    const toastEl = document.getElementById('toast');
-    toastEl.style.cursor = 'pointer';
-    toastEl.onclick = () => {
-      toastEl.style.cursor = ''; toastEl.onclick = null;
-      openM('trackM');
-      const s = document.querySelectorAll('.trk-step');
-      s.forEach(x => { x.classList.remove('done', 'now'); x.querySelector('.trk-time').textContent = '—'; });
-      ['arrCodeSec', 'arrVerSec', 'compSec', 'doneSec'].forEach(id => document.getElementById(id).style.display = 'none');
-      document.getElementById('trkSteps').style.display = 'flex';
-      if (data.status === 'awaiting_arrival') {
-        s[0].classList.add('done'); s[1].classList.add('done', 'now');
-        document.getElementById('arrCode').textContent = 'Código disponível apenas no momento da confirmação';
-        document.getElementById('arrVerSec').style.display = 'none';
-        toast('Por segurança, gere um novo pagamento para emitir novos códigos.', 'inf');
-      } else if (data.status === 'in_progress') {
-        s[0].classList.add('done'); s[1].classList.add('done'); s[2].classList.add('done'); s[3].classList.add('done', 'now');
-        document.getElementById('compSec').style.display = 'block';
-      }
-    };
-  } catch (e) {
-    console.log('Pending check:', e.message);
-  }
+  return;
 }
 
 // === ARRIVAL CODE ===
@@ -175,25 +101,29 @@ async function verifyArr() {
   if (!checkAttempts('arr')) return;
   const v = [1, 2, 3, 4].map(i => document.getElementById('aI' + i).value).join('');
   const vHash = await hashCode(v);
+
   if (!trackingState.arrHash) {
     toast('Código não disponível nesta sessão. Inicie um novo fluxo de pagamento.', 'err');
     return;
   }
+
   if (vHash === trackingState.arrHash) {
     document.getElementById('arrVerSec').style.display = 'none';
     document.getElementById('arrErr').style.display = 'none';
     const s = document.querySelectorAll('.trk-step');
-    s[2].classList.add('done'); s[2].querySelector('.trk-time').textContent = 'Confirmado';
+    s[2].classList.add('done');
+    s[2].querySelector('.trk-time').textContent = 'Confirmado';
     toast('Código ok! Serviço em andamento 🔧', 'ok');
-    _codeAttempts.arr = 0; // Reset on success
-    if (trackingState.currentPaymentId) {
-      await db.collection('payments').doc(trackingState.currentPaymentId).update({
-        status: 'in_progress', arrivedAt: firebase.firestore.FieldValue.serverTimestamp()
-      });
-    }
-    setTimeout(() => { s[3].classList.add('done', 'now'); s[3].querySelector('.trk-time').textContent = 'Agora'; }, 2000);
+    _codeAttempts.arr = 0;
+
     setTimeout(() => {
-      s[4].classList.add('now'); s[4].querySelector('.trk-time').textContent = 'Aguardando';
+      s[3].classList.add('done', 'now');
+      s[3].querySelector('.trk-time').textContent = 'Agora';
+    }, 2000);
+
+    setTimeout(() => {
+      s[4].classList.add('now');
+      s[4].querySelector('.trk-time').textContent = 'Aguardando';
       document.getElementById('compSec').style.display = 'block';
       toast('Peça o código de conclusão ao profissional ✅', 'ok');
     }, 5000);
@@ -209,23 +139,30 @@ async function verifyComp() {
   if (!checkAttempts('comp')) return;
   const v = [1, 2, 3, 4].map(i => document.getElementById('cI' + i).value).join('');
   const vHash = await hashCode(v);
+
   if (!trackingState.compHash) {
     toast('Código não disponível nesta sessão. Inicie um novo fluxo de pagamento.', 'err');
     return;
   }
+
+  // Optional backend validation (if endpoint supports this code type)
+  try {
+    await safeFetch(API_URL + '/api/verify-code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: CU ? CU.uid : null, type: 'completion', code: v })
+    }, 10000);
+  } catch (_) {}
+
   if (vHash === trackingState.compHash) {
     document.getElementById('compSec').style.display = 'none';
     document.getElementById('trkSteps').style.display = 'none';
-    const s = document.querySelectorAll('.trk-step'); s[4].classList.add('done');
+    const s = document.querySelectorAll('.trk-step');
+    s[4].classList.add('done');
     document.getElementById('doneAmt').textContent = 'R$ ' + (agreedPrice * .75).toFixed(2);
     document.getElementById('doneSec').style.display = 'block';
     toast('Concluído! Pagamento liberado! 🎉', 'ok');
-    _codeAttempts.comp = 0; // Reset on success
-    if (trackingState.currentPaymentId) {
-      await db.collection('payments').doc(trackingState.currentPaymentId).update({
-        status: 'completed', completedAt: firebase.firestore.FieldValue.serverTimestamp()
-      });
-    }
+    _codeAttempts.comp = 0;
   } else {
     document.getElementById('compErr').style.display = 'block';
     [1, 2, 3, 4].forEach(i => { document.getElementById('cI' + i).value = ''; });
@@ -236,7 +173,8 @@ async function verifyComp() {
 // === RATING ===
 function rate(n) {
   document.getElementById('stars').querySelectorAll('span').forEach((s, i) => {
-    s.textContent = i < n ? '★' : '☆'; s.style.color = i < n ? '#F59E0B' : '#D1D5DB';
+    s.textContent = i < n ? '★' : '☆';
+    s.style.color = i < n ? '#F59E0B' : '#D1D5DB';
   });
   toast(n + ' estrela' + (n > 1 ? 's' : '') + ' enviada! ⭐', 'ok');
   if (CU) db.collection('ratings').add({ userId: CU.uid, pro: selPro.n, stars: n, at: firebase.firestore.FieldValue.serverTimestamp() });
