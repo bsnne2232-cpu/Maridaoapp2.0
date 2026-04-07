@@ -152,7 +152,7 @@ function sendMsg() {
   // Detect price agreement
   const lo = msg.toLowerCase();
   const pm = msg.match(/(\d{2,})/);
-  if (pm && /\b(topo|fechado|ok|combinado|aceito|fecha|bora|sim|concordo|beleza|blz|topei|r\$)\b/i.test(lo)) {
+  if (pm && /\b(topo|fechado?|fechar|ok|combinado|aceito|fecha|bora|sim|concordo|beleza|blz|topei|reais|r\$)\b/i.test(lo)) {
     const pr = parseInt(pm[1]);
     if (pr >= 20 && !chatSt.agreed) {
       chatSt.agreed = true; chatSt.price = pr; agreedPrice = pr;
