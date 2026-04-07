@@ -51,18 +51,21 @@ let chatSt = { msgs: 0, details: { what: false, where: false, when: false }, agr
 auth.onAuthStateChanged(async u => {
   CU = u;
   if (u) {
-    await db.collection('users').doc(u.uid).set({
-      name: u.displayName || '', email: u.email,
-      lastLogin: firebase.firestore.FieldValue.serverTimestamp()
-    }, { merge: true });
+    // Wrapped in try/catch — if Firestore write fails, updNav() still runs
+    try {
+      await db.collection('users').doc(u.uid).set({
+        name: u.displayName || '', email: u.email,
+        lastLogin: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+    } catch (e) {
+      console.warn('User record write failed (check Firestore rules):', e.code);
+    }
   } else {
     if (typeof cleanupProDashboard === 'function') cleanupProDashboard();
     const btn = document.getElementById('proDashLink');
     if (btn) btn.style.display = 'none';
   }
-  // Update nav immediately so UI isn't stuck
   updNav();
-  // Pro detection runs in background after UI is responsive
   if (u && typeof checkIfProfessional === 'function') {
     checkIfProfessional().catch(e => console.error('Pro check error:', e));
   }
@@ -95,21 +98,46 @@ async function googleLogin() {
     closeM('loginM'); closeM('signupM');
     toast('Login realizado! 🎉', 'ok');
   } catch (e) {
-    const silent = ['auth/popup-closed-by-user', 'auth/cancelled-popup-request'];
-    if (!silent.includes(e.code)) {
-      console.error('[Google Login] code:', e.code, '| msg:', e.message);
+    console.error('[Google Login] code:', e.code, '| msg:', e.message);
+    const popupFailed = [
+      'auth/popup-blocked',
+      'auth/popup-closed-by-user',
+      'auth/cancelled-popup-request'
+    ];
+    if (popupFailed.includes(e.code)) {
+      // Popup blocked or closed — fall back to redirect
+      toast('Redirecionando para login com Google...', 'inf');
+      try {
+        await auth.signInWithRedirect(provider);
+      } catch (re) {
+        console.error('[Google Redirect] code:', re.code, '| msg:', re.message);
+        toast('Erro ao fazer login com Google. Tente novamente.', 'err');
+        btns.forEach(b => { b.disabled = false; b.style.opacity = ''; });
+      }
+    } else {
       const msgs = {
         'auth/unauthorized-domain': 'Domínio não autorizado no Firebase Console.',
-        'auth/popup-blocked': 'Popup bloqueado pelo browser. Permita popups para este site.',
         'auth/operation-not-allowed': 'Login com Google não está ativado no Firebase Console.',
         'auth/network-request-failed': 'Falha de rede. Verifique sua conexão.'
       };
-      toast(msgs[e.code] || 'Erro ao fazer login com Google (' + e.code + ')', 'err');
+      toast(msgs[e.code] || 'Erro ao fazer login com Google (' + (e.code || 'desconhecido') + ')', 'err');
+      btns.forEach(b => { b.disabled = false; b.style.opacity = ''; });
     }
-  } finally {
-    btns.forEach(b => { b.disabled = false; b.style.opacity = ''; });
   }
 }
+
+// Captura resultado do redirect (se o login foi feito via redirect)
+auth.getRedirectResult().then(result => {
+  if (result && result.user) {
+    closeM('loginM'); closeM('signupM');
+    toast('Login realizado! 🎉', 'ok');
+  }
+}).catch(e => {
+  if (e.code && e.code !== 'auth/no-auth-event') {
+    console.error('[getRedirectResult] code:', e.code, '| msg:', e.message);
+    toast('Erro no login com Google (' + e.code + ')', 'err');
+  }
+});
 
 // === EMAIL LOGIN ===
 async function emailLogin() {
