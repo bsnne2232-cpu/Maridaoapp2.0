@@ -55,15 +55,17 @@ auth.onAuthStateChanged(async u => {
       name: u.displayName || '', email: u.email,
       lastLogin: firebase.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
-    // Detect if user is a professional (defined in pro-dashboard.js)
-    if (typeof checkIfProfessional === 'function') await checkIfProfessional();
   } else {
-    // Clear pro state on logout
     if (typeof cleanupProDashboard === 'function') cleanupProDashboard();
     const btn = document.getElementById('proDashLink');
     if (btn) btn.style.display = 'none';
   }
+  // Update nav immediately so UI isn't stuck
   updNav();
+  // Pro detection runs in background after UI is responsive
+  if (u && typeof checkIfProfessional === 'function') {
+    checkIfProfessional().catch(e => console.error('Pro check error:', e));
+  }
 });
 
 function updNav() {
@@ -84,12 +86,17 @@ function reqLogin() {
 
 // === GOOGLE LOGIN ===
 async function googleLogin() {
+  const btns = document.querySelectorAll('.btn-google');
+  btns.forEach(b => { b.disabled = true; b.style.opacity = '.6'; });
   try {
     await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());
     closeM('loginM'); closeM('signupM');
     toast('Login realizado! 🎉', 'ok');
   } catch (e) {
-    if (e.code !== 'auth/popup-closed-by-user') toast('Erro ao fazer login com Google. Tente novamente.', 'err');
+    const ignored = ['auth/popup-closed-by-user', 'auth/cancelled-popup-request'];
+    if (!ignored.includes(e.code)) toast('Erro ao fazer login com Google. Tente novamente.', 'err');
+  } finally {
+    btns.forEach(b => { b.disabled = false; b.style.opacity = ''; });
   }
 }
 
