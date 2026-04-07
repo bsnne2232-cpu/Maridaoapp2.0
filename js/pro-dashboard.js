@@ -655,9 +655,8 @@ let _proChatListener = null;
 let _proChatBookingId = null;
 let _proChatShownIds = new Set();
 
-function openProChat(bookingId, clientInfo, svcName) {
+async function openProChat(bookingId, clientInfo, svcName) {
   _proChatBookingId = bookingId;
-  _proChatShownIds = new Set();
   if (_proChatListener) { _proChatListener(); _proChatListener = null; }
 
   document.getElementById('proChatAv').textContent = '👤';
@@ -666,23 +665,44 @@ function openProChat(bookingId, clientInfo, svcName) {
   document.getElementById('proChatMsgs').innerHTML = '';
   openM('proChatM');
 
+  // Busca userId do booking para fallback de query
+  let userId = null;
+  try {
+    const bk = await db.collection('bookings').doc(bookingId).get();
+    if (bk.exists) userId = bk.data().userId || null;
+  } catch (_) {}
+
+  function renderMsgs(snap) {
+    const msgs = [];
+    snap.forEach(doc => msgs.push({ id: doc.id, ...doc.data() }));
+    // Ordena cliente-side (evita índice composto no Firestore)
+    msgs.sort((a, b) => (a.at ? a.at.toMillis() : 0) - (b.at ? b.at.toMillis() : 0));
+    const container = document.getElementById('proChatMsgs');
+    if (!container) return;
+    container.innerHTML = '';
+    msgs.forEach(d => {
+      const div = document.createElement('div');
+      div.className = 'cmsg ' + (d.sender === 'pro' ? 'sent' : (d.sender === 'sys' ? 'sys' : 'recv'));
+      div.textContent = d.text || '';
+      container.appendChild(div);
+    });
+    container.scrollTop = container.scrollHeight;
+  }
+
+  // Query por bookingId (mensagens enviadas após o último fix)
   _proChatListener = db.collection('messages')
     .where('bookingId', '==', bookingId)
-    .orderBy('at', 'asc')
     .onSnapshot(snap => {
-      snap.docChanges().forEach(change => {
-        if (change.type === 'added' && !_proChatShownIds.has(change.doc.id)) {
-          _proChatShownIds.add(change.doc.id);
-          const d = change.doc.data();
-          const div = document.createElement('div');
-          div.className = 'cmsg ' + (d.sender === 'pro' ? 'sent' : (d.sender === 'sys' ? 'sys' : 'recv'));
-          div.textContent = d.text;
-          const msgs = document.getElementById('proChatMsgs');
-          msgs.appendChild(div);
-          msgs.scrollTop = msgs.scrollHeight;
-        }
-      });
-    }, e => console.error('Pro chat listener:', e));
+      if (!snap.empty) { renderMsgs(snap); return; }
+      // Fallback: query por pro + userId para mensagens antigas sem bookingId
+      if (!userId || !currentProfessional) return;
+      db.collection('messages')
+        .where('pro', '==', currentProfessional.name)
+        .where('userId', '==', userId)
+        .get()
+        .then(s => renderMsgs(s))
+        .catch(() => {});
+    }, e => console.error('Pro chat:', e));
 }
 
 async function sendProMsg() {
