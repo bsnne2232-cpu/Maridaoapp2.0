@@ -91,7 +91,11 @@ async function googleLogin() {
   try {
     await auth.signInWithRedirect(new firebase.auth.GoogleAuthProvider());
   } catch (e) {
-    toast('Erro ao iniciar login com Google. Tente novamente.', 'err');
+    if (e.code === 'auth/unauthorized-domain') {
+      toast('Domínio não autorizado. Contate o suporte.', 'err');
+    } else {
+      toast('Erro ao iniciar login com Google. Tente novamente.', 'err');
+    }
     btns.forEach(b => { b.disabled = false; b.style.opacity = ''; });
   }
 }
@@ -103,8 +107,13 @@ auth.getRedirectResult().then(result => {
     toast('Login realizado! 🎉', 'ok');
   }
 }).catch(e => {
-  if (e.code && e.code !== 'auth/no-auth-event') {
+  if (!e.code || e.code === 'auth/no-auth-event') return;
+  if (e.code === 'auth/unauthorized-domain') {
+    toast('Domínio não autorizado no Firebase. Adicione-o em Authentication → Authorized domains.', 'err');
+    console.error('Firebase: adicione o domínio em Authentication → Sign-in method → Authorized domains:', window.location.hostname);
+  } else {
     toast('Erro no login com Google. Tente novamente.', 'err');
+    console.error('getRedirectResult error:', e.code, e.message);
   }
 });
 
