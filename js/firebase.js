@@ -94,25 +94,42 @@ async function googleLogin() {
   const btns = document.querySelectorAll('.btn-google');
   btns.forEach(b => { b.disabled = true; b.style.opacity = '.6'; });
   try {
-    await auth.signInWithPopup(provider);
-    closeM('loginM'); closeM('signupM');
-    toast('Login realizado! 🎉', 'ok');
+    const result = await auth.signInWithPopup(provider);
+    if (result && result.user) {
+      closeM('loginM'); closeM('signupM');
+      toast('Login realizado! 🎉', 'ok');
+    }
   } catch (e) {
     const silent = ['auth/popup-closed-by-user', 'auth/cancelled-popup-request'];
-    if (!silent.includes(e.code)) {
-      const msgs = {
-        'auth/operation-not-allowed': 'Ative o login com Google no Firebase Console → Authentication → Sign-in method.',
-        'auth/unauthorized-domain': 'Domínio não autorizado no Firebase Console.',
-        'auth/popup-blocked': 'Popup bloqueado. Permita popups para este site e tente novamente.',
-        'auth/network-request-failed': 'Falha de rede. Verifique sua conexão.'
-      };
-      toast(msgs[e.code] || 'Erro ao fazer login com Google (' + (e.code || 'desconhecido') + ')', 'err');
+    if (['auth/popup-blocked', 'auth/web-storage-unsupported'].includes(e.code)) {
+      // Popup bloqueado — tenta redirect como fallback
+      toast('Redirecionando para login...', 'inf');
+      try {
+        await auth.setPersistence(firebase.auth.Auth.Persistence.SESSION);
+        await auth.signInWithRedirect(provider);
+        return; // página vai navegar, não restaurar botões
+      } catch (_) {}
+    } else if (!silent.includes(e.code)) {
       console.error('[Google Login]', e.code, e.message);
+      toast('Erro ao fazer login com Google. Tente novamente.', 'err');
     }
-  } finally {
-    btns.forEach(b => { b.disabled = false; b.style.opacity = ''; });
   }
+  btns.forEach(b => { b.disabled = false; b.style.opacity = ''; });
 }
+
+// Captura resultado caso o popup tenha feito redirect internamente
+auth.getRedirectResult().then(result => {
+  if (result && result.user) {
+    closeM('loginM'); closeM('signupM');
+    toast('Login realizado! 🎉', 'ok');
+  }
+}).catch(e => {
+  if (e.code && e.code !== 'auth/no-auth-event') {
+    console.error('[getRedirectResult]', e.code, e.message);
+  }
+});
+
+
 
 // === EMAIL LOGIN ===
 async function emailLogin() {
