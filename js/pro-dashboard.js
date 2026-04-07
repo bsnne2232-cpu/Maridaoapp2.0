@@ -3,6 +3,22 @@ let currentProfessional = null;
 let proRequestsListener = null;
 const declinedBookings = new Set();
 
+// === PERSISTÊNCIA DE RECUSAS (localStorage por pro) ===
+function _loadDeclined() {
+  if (!CU) return;
+  try {
+    const saved = JSON.parse(localStorage.getItem('dec_' + CU.uid) || '[]');
+    saved.forEach(id => declinedBookings.add(id));
+  } catch (e) {}
+}
+function _saveDeclined() {
+  if (!CU) return;
+  try {
+    const arr = [...declinedBookings].slice(-200);
+    localStorage.setItem('dec_' + CU.uid, JSON.stringify(arr));
+  } catch (e) {}
+}
+
 // === DETECTAR SE É PROFISSIONAL ===
 async function checkIfProfessional() {
   if (!CU) return;
@@ -69,6 +85,7 @@ function showClientView() {
 // === LOAD DASHBOARD ===
 async function loadProDashboard() {
   if (!currentProfessional) return;
+  _loadDeclined(); // restaura recusas salvas localmente
 
   // Update header
   document.getElementById('proNameDash').textContent = currentProfessional.name || 'Profissional';
@@ -222,10 +239,19 @@ async function acceptRequest(bookingId) {
 // === DECLINE REQUEST ===
 function declineRequest(bookingId) {
   declinedBookings.add(bookingId);
-  // Persiste no Firestore para não voltar ao reabrir o dashboard
+  _saveDeclined(); // persiste no localStorage
   if (CU) {
+    // Persiste no Firestore (evita reaparecer em outras sessões)
     db.collection('bookings').doc(bookingId).update({
       declinedBy: firebase.firestore.FieldValue.arrayUnion(CU.uid)
+    }).catch(() => {});
+    // Notifica o cliente via mensagem de sistema no chat
+    db.collection('messages').add({
+      bookingId: bookingId,
+      text: '⚠️ Um profissional não pôde atender seu pedido. Aguarde outro profissional disponível.',
+      sender: 'sys',
+      seq: Date.now(),
+      at: firebase.firestore.FieldValue.serverTimestamp()
     }).catch(() => {});
   }
   const card = document.getElementById('req-' + bookingId);
