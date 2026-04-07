@@ -195,9 +195,9 @@ async function searchProsList() {
 
   const pros = [];
 
-  // Busca reais no Firestore
+  // Busca reais no Firestore (todos ativos, independente de docs)
   try {
-    let q = db.collection('professionals').where('docsStatus', '==', 'approved');
+    let q = db.collection('professionals').where('status', '==', 'active');
     if (specFilter) q = q.where('spec', '==', specFilter);
     const snap = await q.limit(24).get();
     snap.forEach(doc => {
@@ -255,6 +255,9 @@ function renderProCards(pros) {
     const card = document.createElement('div');
     card.className = 'pro-card';
 
+    const isVerified = p.docsStatus === 'approved';
+    const isPending = p.docsStatus === 'pending';
+    const verifiedBadge = isVerified ? ' ✅' : (isPending ? ' 🟡' : '');
     const tagsHtml = tags.slice(0, 3).map(t => '<span>' + esc(String(t).trim()) + '</span>').join('');
     const ratingHtml = rating ? '<div class="pro-rt">★ ' + esc(String(rating)) + (reviews ? ' <span style="font-weight:400;color:var(--text2)">(' + esc(String(reviews)) + ')</span>' : '') + '</div>' : '';
     const distHtml = dist ? '<div style="font-size:.78rem;color:var(--text2);margin-bottom:8px">📍 ' + esc(String(dist)) + '</div>' : '';
@@ -264,7 +267,7 @@ function renderProCards(pros) {
       '<div class="pro-hdr">' +
         '<div class="pro-av">' + esc(String(icon)) + '</div>' +
         '<div style="flex:1;min-width:0">' +
-          '<div class="pro-nm">' + esc(name) + (isTop ? ' ⭐' : '') + '</div>' +
+          '<div class="pro-nm">' + esc(name) + (isTop ? ' ⭐' : '') + verifiedBadge + '</div>' +
           '<div class="pro-rl">' + esc(spec) + '</div>' +
         '</div>' +
         '<button class="fav-btn' + (isFaved ? ' faved' : '') + '" data-pid="' + esc(pid) + '" title="' + (isFaved ? 'Remover favorito' : 'Favoritar') + '">' + (isFaved ? '❤️' : '🤍') + '</button>' +
