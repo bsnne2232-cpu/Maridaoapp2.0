@@ -126,30 +126,30 @@
 <!-- Step 1: Basic info only -->
 <div class="panel active" id="proS1">
 <div class="fg"><label>Nome completo *</label><input type="text" id="proName" placeholder="Seu nome"></div>
-<div class="fg"><label>E-mail *</label><input type="email" id="proEmail" placeholder="seu@email.com"></div>
+<div class="fg"><label>E-mail *</label><input type="email" id="proEmail" placeholder="seu@email.com" readonly></div>
 <div class="fg"><label>CEP *</label><input type="text" id="proCep" placeholder="00000-000" maxlength="9"></div>
 <button class="btn-next" onclick="proNext(2)">Continuar →</button>
 </div>
 <!-- Step 2: Specialty -->
 <div class="panel" id="proS2">
-<div class="fg"><label>Especialidade principal *</label><select id="proSpec"><option value="">Selecione...</option><option>Faxina / Diarista</option><option>Encanamento</option><option>Elétrica</option><option>Pintura</option><option>Montagem de móveis</option><option>Ar-condicionado</option><option>Jardinagem</option><option>Chaveiro</option><option>Pet Sitter</option><option>Carreto</option><option>Mudança</option><option>Outro</option></select></div>
-<div class="fg"><label>Quanto cobra por hora (R$)? *</label><input type="number" id="proRate" placeholder="80"></div>
+<div class="fg"><label>Especialidade principal *</label><select id="proSpec" onchange="updateRateLabel()"><option value="">Selecione...</option><option value="Faxina / Diarista">Faxina / Diarista</option><option value="Encanamento">Encanamento</option><option value="Elétrica">Elétrica</option><option value="Pintura">Pintura</option><option value="Montagem de móveis">Montagem de móveis</option><option value="Ar-condicionado">Ar-condicionado</option><option value="Jardinagem">Jardinagem</option><option value="Chaveiro">Chaveiro</option><option value="Pet Sitter">Pet Sitter</option><option value="Carreto">Carreto</option><option value="Mudança">Mudança</option><option value="Outro">Outro</option></select></div>
+<div class="fg"><label id="rateLbl">Valor por serviço (R$) *</label><input type="number" id="proRate" placeholder="Ex: 150"></div>
 <div class="fg"><label>Raio de atendimento</label><select id="proRadius"><option>Até 5 km</option><option>Até 10 km</option><option>Até 20 km</option><option>Até 30 km</option><option>Toda a cidade</option></select></div>
 <div class="fg"><label>Sobre você</label><textarea id="proBio" rows="3" placeholder="Conte sobre sua experiência..."></textarea></div>
-<label style="display:flex;gap:8px;font-size:.8rem;margin:12px 0;align-items:flex-start"><input type="checkbox" id="proTerms"><span>Concordo com os Termos de Uso e entendo que: <b>25% de comissão</b> é descontado de cada serviço.</span></label>
 <button class="btn-back" onclick="proNext(1)">← Voltar</button>
-<button class="btn-next" onclick="submitPro()">Criar perfil grátis 🚀</button>
+<button class="btn-next" onclick="openTermsPro()">Ver termos e criar perfil 🚀</button>
 </div>
 <!-- Success -->
 <div class="panel" id="proS3" style="text-align:center;padding:20px 0">
 <div style="font-size:3rem">🎉</div>
 <h3 style="margin:10px 0">Perfil criado!</h3>
-<p style="color:var(--text2);font-size:.9rem">Você já pode explorar o app! Quando quiser aceitar seu primeiro serviço, pediremos seus documentos (CPF, RG e comprovante).</p>
+<p style="color:var(--text2);font-size:.9rem">Agora envie seus documentos para começar a receber pedidos.</p>
 <div style="background:var(--pl);border-radius:var(--rs);padding:14px;margin-top:14px;text-align:left;font-size:.85rem">
-<div style="padding:4px 0">✅ Perfil criado — explore o app</div>
-<div style="padding:4px 0;color:var(--text2)">📄 Envie documentos quando quiser começar</div>
+<div style="padding:4px 0">✅ Perfil criado</div>
+<div style="padding:4px 0;color:var(--p);font-weight:600">📄 Envie seus documentos para ativar</div>
 <div style="padding:4px 0;color:var(--text2)">✅ Documentos aprovados → receba serviços</div>
 </div>
+<button class="btn-next" style="margin-top:16px;width:100%" onclick="openM('docsM')">📤 Enviar documentos agora →</button>
 </div>
 </div>
 </div>
@@ -239,6 +239,30 @@
 <div style="font-size:.85rem;padding:4px 0;color:var(--text2)">💰 Comece a receber serviços</div>
 </div>
 <button class="btn-primary btn-full" onclick="closeM('pendingM')">Entendi, vou aguardar</button>
+</div></div>
+
+<!-- TERMS PRO MODAL -->
+<div class="mo" id="termsProM"><div class="md" style="max-width:500px">
+<button class="md-close" onclick="closeM('termsProM')">✕</button>
+<h3 style="margin-bottom:4px">📋 Termos de adesão</h3>
+<p style="color:var(--text2);font-size:.88rem;margin-bottom:16px">Leia com atenção antes de criar seu perfil.</p>
+<div style="background:var(--pl);border-radius:var(--rs);padding:16px;font-size:.85rem;line-height:1.6;max-height:320px;overflow-y:auto;margin-bottom:16px">
+<p><strong>💳 Pagamentos via Mercado Pago</strong><br>
+Todos os pagamentos realizados pelos clientes são processados exclusivamente pelo <strong>Mercado Pago</strong>. O valor é creditado em sua conta Mercado Pago em até 14 dias úteis após a conclusão do serviço.</p>
+<p><strong>📊 Taxa de plataforma: 25%</strong><br>
+O Maridão App retém <strong>25% do valor combinado</strong> a título de taxa de serviço, que cobre: processamento de pagamento, seguro básico, suporte e manutenção da plataforma. Você recebe os <strong>75% restantes</strong>.</p>
+<p><strong>Exemplo:</strong> Se você combinar R$&nbsp;200 com o cliente, você receberá R$&nbsp;150 (75%).</p>
+<p><strong>📄 Verificação de identidade</strong><br>
+Para começar a receber serviços, você precisará enviar RG/CNH, selfie e comprovante de endereço. A aprovação ocorre em até 24 horas.</p>
+<p><strong>⚠️ Cancelamentos</strong><br>
+Cancelamentos em cima da hora podem resultar em avaliação negativa e suspensão temporária da conta.</p>
+<p>Ao criar seu perfil você declara ter lido e concordar com estes termos e com a <a href="#" style="color:var(--p)">Política de Privacidade</a> do Maridão App.</p>
+</div>
+<label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:.88rem;margin-bottom:16px">
+<input type="checkbox" id="proTermsCheck" style="margin-top:3px;flex-shrink:0">
+<span>Li e aceito os termos de adesão, incluindo a taxa de 25% e os pagamentos via Mercado Pago.</span>
+</label>
+<button class="btn-primary btn-full" id="submitProBtn" onclick="submitPro()">Confirmar e criar perfil →</button>
 </div></div>
 
 <!-- BOOK MODAL -->
