@@ -81,6 +81,7 @@ async function loadProDashboard() {
   loadCompletedRequests();
   loadEarningsData();
   loadProfileData();
+  loadChatsHistory();
 
   // Real-time listener for new requests matching specialty
   if (proRequestsListener) {
@@ -540,6 +541,112 @@ function switchProTab(tab) {
   document.querySelectorAll('.pro-tab-btn').forEach(btn => btn.classList.remove('active'));
   const activeBtn = document.querySelector('.pro-tab-btn[data-tab="' + tab + '"]');
   if (activeBtn) activeBtn.classList.add('active');
+}
+
+// === CHATS ANTIGOS ===
+async function loadChatsHistory() {
+  if (!currentProfessional) return;
+  const list = document.getElementById('chatHistoryList');
+  const noEl = document.getElementById('noChats');
+  if (!list) return;
+  list.innerHTML = '';
+
+  try {
+    // Busca mensagens onde o pro é o profissional atual
+    const snap = await db.collection('messages')
+      .where('pro', '==', currentProfessional.name)
+      .orderBy('at', 'desc')
+      .limit(100)
+      .get();
+
+    if (snap.empty) {
+      if (noEl) noEl.style.display = 'block';
+      return;
+    }
+    if (noEl) noEl.style.display = 'none';
+
+    // Agrupa mensagens por userId (cada userId = uma conversa)
+    const convMap = new Map();
+    snap.forEach(doc => {
+      const d = doc.data();
+      const key = d.userId || 'anon';
+      if (!convMap.has(key)) {
+        convMap.set(key, { userId: key, msgs: [], lastAt: d.at, service: d.service || '' });
+      }
+      const conv = convMap.get(key);
+      conv.msgs.push(d);
+      // Mantém a data mais recente
+      if (d.at && (!conv.lastAt || d.at.toMillis() > conv.lastAt.toMillis())) {
+        conv.lastAt = d.at;
+      }
+    });
+
+    // Ordena conversas por data desc
+    const convs = Array.from(convMap.values()).sort((a, b) => {
+      const ta = a.lastAt ? a.lastAt.toMillis() : 0;
+      const tb = b.lastAt ? b.lastAt.toMillis() : 0;
+      return tb - ta;
+    });
+
+    convs.forEach(conv => {
+      const lastMsg = conv.msgs.find(m => m.text) || {};
+      const dateStr = conv.lastAt ? conv.lastAt.toDate().toLocaleDateString('pt-BR') : '—';
+      const timeStr = conv.lastAt ? conv.lastAt.toDate().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
+      const preview = lastMsg.text ? lastMsg.text.slice(0, 80) + (lastMsg.text.length > 80 ? '…' : '') : '(sem mensagem)';
+      const msgCount = conv.msgs.length;
+
+      const card = document.createElement('div');
+      card.className = 'pro-request-card';
+      card.style.cursor = 'pointer';
+      card.innerHTML =
+        '<div style="display:flex;justify-content:space-between;align-items:start;gap:12px">' +
+          '<div style="flex:1;min-width:0">' +
+            '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">' +
+              '<div style="width:36px;height:36px;border-radius:50%;background:var(--pl);display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--p);flex-shrink:0">👤</div>' +
+              '<div>' +
+                '<div style="font-weight:600;font-size:.9rem">Cliente</div>' +
+                '<div style="font-size:.78rem;color:var(--text2)">' + msgCount + ' mensagem' + (msgCount !== 1 ? 's' : '') + '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div style="font-size:.83rem;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(preview) + '</div>' +
+          '</div>' +
+          '<div style="text-align:right;flex-shrink:0">' +
+            '<div style="font-size:.78rem;color:var(--text2)">' + esc(dateStr) + '</div>' +
+            '<div style="font-size:.75rem;color:var(--text2)">' + esc(timeStr) + '</div>' +
+          '</div>' +
+        '</div>';
+
+      // Expandir mensagens ao clicar
+      card.addEventListener('click', () => {
+        const existing = card.querySelector('.chat-history-msgs');
+        if (existing) { existing.remove(); return; }
+        const msgsDiv = document.createElement('div');
+        msgsDiv.className = 'chat-history-msgs';
+        msgsDiv.style.cssText = 'margin-top:12px;padding-top:12px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:6px;max-height:260px;overflow-y:auto';
+        const sorted = [...conv.msgs].sort((a, b) => {
+          const ta = a.at ? a.at.toMillis() : 0;
+          const tb = b.at ? b.at.toMillis() : 0;
+          return ta - tb;
+        });
+        sorted.forEach(m => {
+          const bubble = document.createElement('div');
+          const isUser = m.sender === 'user';
+          bubble.style.cssText = 'max-width:80%;padding:8px 10px;border-radius:10px;font-size:.83rem;' +
+            (isUser ? 'align-self:flex-end;background:var(--p);color:#fff;margin-left:auto' : 'align-self:flex-start;background:var(--bg2);color:var(--text)');
+          bubble.textContent = m.text || '';
+          msgsDiv.appendChild(bubble);
+        });
+        card.appendChild(msgsDiv);
+        msgsDiv.scrollTop = msgsDiv.scrollHeight;
+      });
+
+      list.appendChild(card);
+    });
+
+  } catch (e) {
+    console.error('Erro ao carregar chats:', e);
+    if (noEl) { noEl.style.display = 'block'; noEl.querySelector('p').textContent = 'Erro ao carregar chats.'; }
+  }
 }
 
 // === CLEANUP (chamado no logout) ===

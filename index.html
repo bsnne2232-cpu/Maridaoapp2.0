@@ -190,6 +190,7 @@
         <button class="pro-tab-btn" data-tab="accepted" onclick="switchProTab('accepted')">✅ Em andamento</button>
         <button class="pro-tab-btn" data-tab="completed" onclick="switchProTab('completed')">🏆 Concluídos</button>
         <button class="pro-tab-btn" data-tab="earnings" onclick="switchProTab('earnings')">💰 Ganhos</button>
+        <button class="pro-tab-btn" data-tab="chats" onclick="switchProTab('chats')">💬 Chats</button>
         <button class="pro-tab-btn" data-tab="profile" onclick="switchProTab('profile')">⚙️ Perfil</button>
       </div>
     </div>
@@ -327,8 +328,30 @@
         </div>
 
       </div><!-- /tab-profile -->
+
+      <!-- ABA 6: CHATS ANTIGOS -->
+      <div id="tab-chats" class="pro-tab-content">
+        <div style="margin-bottom:16px">
+          <h4>Chats antigos</h4>
+          <p style="color:var(--text2);font-size:.85rem">Histórico de conversas com clientes.</p>
+        </div>
+        <div id="chatHistoryList" style="display:grid;gap:12px"></div>
+        <div id="noChats" style="text-align:center;padding:40px;color:var(--text2)">
+          <div style="font-size:3rem;margin-bottom:12px">💬</div>
+          <p>Nenhuma conversa encontrada</p>
+        </div>
+      </div>
+
     </div><!-- /pro-dash-content -->
   </div><!-- /pro-page -->
+
+  <!-- AVISO FIXO: MERCADO PAGO + TAXA -->
+  <div class="pro-payment-notice">
+    <span>💳 <strong>Pagamentos exclusivamente via Mercado Pago</strong></span>
+    <span class="pro-notice-sep">|</span>
+    <span>Taxa de plataforma: <strong>25%</strong> — você recebe <strong>75%</strong> do valor combinado</span>
+  </div>
+
 </div><!-- /proView -->
 
 <!-- === MODALS === -->
