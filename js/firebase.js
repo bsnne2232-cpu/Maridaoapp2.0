@@ -84,38 +84,32 @@ function reqLogin() {
   return true;
 }
 
-// === GOOGLE LOGIN (redirect — avoids popup/CSP issues) ===
+// === GOOGLE LOGIN ===
 async function googleLogin() {
+  const provider = new firebase.auth.GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: 'select_account' });
   const btns = document.querySelectorAll('.btn-google');
   btns.forEach(b => { b.disabled = true; b.style.opacity = '.6'; });
   try {
-    await auth.signInWithRedirect(new firebase.auth.GoogleAuthProvider());
+    await auth.signInWithPopup(provider);
+    closeM('loginM'); closeM('signupM');
+    toast('Login realizado! 🎉', 'ok');
   } catch (e) {
-    if (e.code === 'auth/unauthorized-domain') {
-      toast('Domínio não autorizado. Contate o suporte.', 'err');
-    } else {
-      toast('Erro ao iniciar login com Google. Tente novamente.', 'err');
+    const silent = ['auth/popup-closed-by-user', 'auth/cancelled-popup-request'];
+    if (!silent.includes(e.code)) {
+      console.error('[Google Login] code:', e.code, '| msg:', e.message);
+      const msgs = {
+        'auth/unauthorized-domain': 'Domínio não autorizado no Firebase Console.',
+        'auth/popup-blocked': 'Popup bloqueado pelo browser. Permita popups para este site.',
+        'auth/operation-not-allowed': 'Login com Google não está ativado no Firebase Console.',
+        'auth/network-request-failed': 'Falha de rede. Verifique sua conexão.'
+      };
+      toast(msgs[e.code] || 'Erro ao fazer login com Google (' + e.code + ')', 'err');
     }
+  } finally {
     btns.forEach(b => { b.disabled = false; b.style.opacity = ''; });
   }
 }
-
-// Handle redirect result on page load
-auth.getRedirectResult().then(result => {
-  if (result && result.user) {
-    closeM('loginM'); closeM('signupM');
-    toast('Login realizado! 🎉', 'ok');
-  }
-}).catch(e => {
-  if (!e.code || e.code === 'auth/no-auth-event') return;
-  if (e.code === 'auth/unauthorized-domain') {
-    toast('Domínio não autorizado no Firebase. Adicione-o em Authentication → Authorized domains.', 'err');
-    console.error('Firebase: adicione o domínio em Authentication → Sign-in method → Authorized domains:', window.location.hostname);
-  } else {
-    toast('Erro no login com Google. Tente novamente.', 'err');
-    console.error('getRedirectResult error:', e.code, e.message);
-  }
-});
 
 // === EMAIL LOGIN ===
 async function emailLogin() {
