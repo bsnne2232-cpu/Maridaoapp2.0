@@ -55,6 +55,13 @@ auth.onAuthStateChanged(async u => {
       name: u.displayName || '', email: u.email,
       lastLogin: firebase.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
+    // Detect if user is a professional (defined in pro-dashboard.js)
+    if (typeof checkIfProfessional === 'function') await checkIfProfessional();
+  } else {
+    // Clear pro state on logout
+    if (typeof cleanupProDashboard === 'function') cleanupProDashboard();
+    const btn = document.getElementById('proDashLink');
+    if (btn) btn.style.display = 'none';
   }
   updNav();
 });
