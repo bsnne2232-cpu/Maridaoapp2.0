@@ -55,15 +55,17 @@ auth.onAuthStateChanged(async u => {
       name: u.displayName || '', email: u.email,
       lastLogin: firebase.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
-    // Detect if user is a professional (defined in pro-dashboard.js)
-    if (typeof checkIfProfessional === 'function') await checkIfProfessional();
   } else {
-    // Clear pro state on logout
     if (typeof cleanupProDashboard === 'function') cleanupProDashboard();
     const btn = document.getElementById('proDashLink');
     if (btn) btn.style.display = 'none';
   }
+  // Update nav immediately so UI isn't stuck
   updNav();
+  // Pro detection runs in background after UI is responsive
+  if (u && typeof checkIfProfessional === 'function') {
+    checkIfProfessional().catch(e => console.error('Pro check error:', e));
+  }
 });
 
 function updNav() {
@@ -82,16 +84,38 @@ function reqLogin() {
   return true;
 }
 
-// === GOOGLE LOGIN ===
+// === GOOGLE LOGIN (redirect — avoids popup/CSP issues) ===
 async function googleLogin() {
+  const btns = document.querySelectorAll('.btn-google');
+  btns.forEach(b => { b.disabled = true; b.style.opacity = '.6'; });
   try {
-    await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());
-    closeM('loginM'); closeM('signupM');
-    toast('Login realizado! 🎉', 'ok');
+    await auth.signInWithRedirect(new firebase.auth.GoogleAuthProvider());
   } catch (e) {
-    if (e.code !== 'auth/popup-closed-by-user') toast('Erro ao fazer login com Google. Tente novamente.', 'err');
+    if (e.code === 'auth/unauthorized-domain') {
+      toast('Domínio não autorizado. Contate o suporte.', 'err');
+    } else {
+      toast('Erro ao iniciar login com Google. Tente novamente.', 'err');
+    }
+    btns.forEach(b => { b.disabled = false; b.style.opacity = ''; });
   }
 }
+
+// Handle redirect result on page load
+auth.getRedirectResult().then(result => {
+  if (result && result.user) {
+    closeM('loginM'); closeM('signupM');
+    toast('Login realizado! 🎉', 'ok');
+  }
+}).catch(e => {
+  if (!e.code || e.code === 'auth/no-auth-event') return;
+  if (e.code === 'auth/unauthorized-domain') {
+    toast('Domínio não autorizado no Firebase. Adicione-o em Authentication → Authorized domains.', 'err');
+    console.error('Firebase: adicione o domínio em Authentication → Sign-in method → Authorized domains:', window.location.hostname);
+  } else {
+    toast('Erro no login com Google. Tente novamente.', 'err');
+    console.error('getRedirectResult error:', e.code, e.message);
+  }
+});
 
 // === EMAIL LOGIN ===
 async function emailLogin() {
