@@ -66,6 +66,7 @@ auth.onAuthStateChanged(async u => {
     if (btn) btn.style.display = 'none';
   }
   updNav();
+  if (typeof initProForm === 'function') initProForm();
   if (u && typeof checkIfProfessional === 'function') {
     checkIfProfessional().catch(e => console.error('Pro check error:', e));
   }
