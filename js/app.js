@@ -291,18 +291,27 @@ function renderProCards(pros) {
 
 function renderPros() { searchProsList(); }
 
-function quickBook(nm, spec) {
+function quickBook(nm, spec, proData) {
   if (!reqLogin()) return;
-  // Pré-seleciona especialidade no modal de agendamento
+  // Guarda o profissional pré-selecionado para pular o passo 2
+  window._preselectedPro = proData || null;
+  window._preselectedProName = nm;
+  window._preselectedProSpec = spec;
+
+  // Atualiza botão do modal para indicar que o pro já está escolhido
+  const bookBtn = document.querySelector('#bkS1 .btn-primary');
+  if (bookBtn) {
+    bookBtn.textContent = nm ? 'Agendar com ' + nm + ' →' : 'Buscar profissionais →';
+  }
+
+  // Pré-seleciona especialidade no select
   const sel = document.getElementById('bkSvc');
   if (sel && spec) {
     for (let i = 0; i < sel.options.length; i++) {
-      if (sel.options[i].value === spec || sel.options[i].text === spec) { sel.selectedIndex = i; break; }
-    }
-  } else if (sel) {
-    // Busca no PDB pelo nome
-    for (const [s, ps] of Object.entries(PDB)) {
-      if (ps.find(p => p.n === nm)) { for (let i = 0; i < sel.options.length; i++) { if (sel.options[i].text.includes(s) || s.includes(sel.options[i].text)) { sel.selectedIndex = i; break; } } break; }
+      if (sel.options[i].value === spec || sel.options[i].text === spec ||
+          sel.options[i].text.toLowerCase().includes((spec || '').toLowerCase().split('/')[0].trim())) {
+        sel.selectedIndex = i; break;
+      }
     }
   }
   toggleCarreto(); bkGo(1); openM('bookM');
@@ -367,9 +376,32 @@ function searchPros() {
     if (!dateCheck.ok) { toast(dateCheck.msg, 'err'); return; }
     window.bkDetails = { svc, from: f, to: t, date: d, time: tm };
   }
+
+  // Se tem profissional pré-selecionado, vai direto ao chat
+  if (window._preselectedProName) {
+    const nm = window._preselectedProName;
+    const spec = window._preselectedProSpec || svc;
+    window._preselectedProName = null;
+    window._preselectedPro = null;
+    window._preselectedProSpec = null;
+    // Restaura texto do botão
+    const bookBtn = document.querySelector('#bkS1 .btn-primary');
+    if (bookBtn) bookBtn.textContent = 'Buscar profissionais →';
+    // Monta objeto no formato esperado pelo chat
+    const proObj = { n: nm, e: '👤', p: 100 };
+    // Tenta achar no PDB para pegar ícone/preço
+    for (const [s, list] of Object.entries(PDB)) {
+      const found = list.find(p => p.n === nm);
+      if (found) { proObj.e = found.e; proObj.p = found.p || 100; break; }
+    }
+    closeM('bookM');
+    openChat(proObj, spec);
+    return;
+  }
+
+  // Sem pro pré-selecionado: mostra lista do passo 2
   const pros = PDB[svc] || PDB['Faxina'];
   document.getElementById('prosCount').textContent = pros.length + ' encontrados';
-  // Store pros for safe onclick (avoid inline JSON injection)
   window._searchPros = pros;
   document.getElementById('prosResults').innerHTML = pros.map((p, idx) => {
     const ph = (!isC && p.p) ? `<div style="font-weight:700;color:var(--p)">R$ ${esc(String(p.p))}</div>` : '';

@@ -479,7 +479,7 @@ Cancelamentos em cima da hora podem resultar em avaliação negativa e suspensã
 
 <!-- BOOK MODAL -->
 <div class="mo" id="bookM"><div class="md" style="max-width:520px">
-<button class="md-close" onclick="closeM('bookM')">✕</button>
+<button class="md-close" onclick="closeM('bookM');window._preselectedProName=null;window._preselectedPro=null;const bb=document.querySelector('#bkS1 .btn-primary');if(bb)bb.textContent='Buscar profissionais →'">✕</button>
 <div class="panel active" id="bkS1">
 <h3>Agendar serviço 📅</h3><p class="msub">Preencha os detalhes obrigatórios.</p>
 <div class="fg"><label>Tipo de serviço *</label><select id="bkSvc" onchange="toggleCarreto()"><option>Encanamento</option><option>Elétrica</option><option>Faxina</option><option>Pintura</option><option>Montagem de móveis</option><option>Ar-condicionado</option><option>Jardinagem</option><option>Chaveiro</option><option>Carreto</option><option>Mudança</option><option>Pet Sitter</option></select></div>
