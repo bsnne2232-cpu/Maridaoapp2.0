@@ -155,6 +155,7 @@ function renderRequestCard(bookingId, booking) {
         '<div style="font-size:1.3rem;font-weight:800;color:var(--p);margin-bottom:12px">R$ ' + esc(String(rate)) + '</div>' +
         '<div style="display:flex;gap:8px;flex-direction:column">' +
           '<button class="btn-accept" onclick="acceptRequest(\'' + bookingId + '\')">✅ Aceitar</button>' +
+          '<button class="btn-chat" onclick="openProChat(\'' + bookingId + '\',\'Cliente\',\'' + esc(booking.service || '') + '\')">💬 Chat</button>' +
           '<button class="btn-decline" onclick="declineRequest(\'' + bookingId + '\')">❌ Recusar</button>' +
         '</div>' +
       '</div>' +
@@ -647,6 +648,63 @@ async function loadChatsHistory() {
     console.error('Erro ao carregar chats:', e);
     if (noEl) { noEl.style.display = 'block'; noEl.querySelector('p').textContent = 'Erro ao carregar chats.'; }
   }
+}
+
+// === PRO CHAT (responder ao cliente) ===
+let _proChatListener = null;
+let _proChatBookingId = null;
+let _proChatShownIds = new Set();
+
+function openProChat(bookingId, clientInfo, svcName) {
+  _proChatBookingId = bookingId;
+  _proChatShownIds = new Set();
+  if (_proChatListener) { _proChatListener(); _proChatListener = null; }
+
+  document.getElementById('proChatAv').textContent = '👤';
+  document.getElementById('proChatNm').textContent = clientInfo || 'Cliente';
+  document.getElementById('proChatSvc').textContent = svcName || '';
+  document.getElementById('proChatMsgs').innerHTML = '';
+  openM('proChatM');
+
+  _proChatListener = db.collection('messages')
+    .where('bookingId', '==', bookingId)
+    .orderBy('at', 'asc')
+    .onSnapshot(snap => {
+      snap.docChanges().forEach(change => {
+        if (change.type === 'added' && !_proChatShownIds.has(change.doc.id)) {
+          _proChatShownIds.add(change.doc.id);
+          const d = change.doc.data();
+          const div = document.createElement('div');
+          div.className = 'cmsg ' + (d.sender === 'pro' ? 'sent' : (d.sender === 'sys' ? 'sys' : 'recv'));
+          div.textContent = d.text;
+          const msgs = document.getElementById('proChatMsgs');
+          msgs.appendChild(div);
+          msgs.scrollTop = msgs.scrollHeight;
+        }
+      });
+    }, e => console.error('Pro chat listener:', e));
+}
+
+async function sendProMsg() {
+  if (!_proChatBookingId || !CU || !currentProfessional) return;
+  const inp = document.getElementById('proChatIn');
+  const msg = (inp.value || '').trim();
+  if (!msg) return;
+  inp.value = '';
+  await db.collection('messages').add({
+    bookingId: _proChatBookingId,
+    pro: currentProfessional.name,
+    userId: null,
+    text: msg,
+    sender: 'pro',
+    at: firebase.firestore.FieldValue.serverTimestamp()
+  }).catch(e => toast('Erro ao enviar: ' + e.message, 'err'));
+}
+
+function closeProChat() {
+  if (_proChatListener) { _proChatListener(); _proChatListener = null; }
+  _proChatBookingId = null;
+  closeM('proChatM');
 }
 
 // === CLEANUP (chamado no logout) ===

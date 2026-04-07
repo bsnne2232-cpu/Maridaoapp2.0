@@ -254,6 +254,8 @@ footer a{display:block;font-size:.8rem;padding:3px 0;transition:color .2s}footer
 .btn-accept{background:#10B981;color:#fff}
 .btn-accept:hover{background:#059669;transform:translateY(-1px)}
 .btn-accept:disabled{opacity:.6;cursor:not-allowed;transform:none}
+.btn-chat{background:#6366f1;color:#fff}
+.btn-chat:hover{background:#4f46e5;transform:translateY(-1px)}
 .btn-decline{background:#EF4444;color:#fff}
 .btn-decline:hover{background:#DC2626;transform:translateY(-1px)}
 .earnings-card{border:1px solid var(--border);border-radius:var(--rs);padding:16px;background:var(--bg2)}

@@ -8,6 +8,8 @@ firebase.initializeApp({
   appId: "1:817190352839:web:7a9dd8196254a93bbd0be2"
 });
 const auth = firebase.auth(), db = firebase.firestore();
+// SESSION: cada aba mantém sua própria sessão (resolve conflito entre contas)
+auth.setPersistence(firebase.auth.Auth.Persistence.SESSION).catch(() => {});
 const API_URL = 'https://maridaoapi.bsnne2232.workers.dev';
 
 async function getAuthHeaders(baseHeaders = {}) {

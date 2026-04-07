@@ -509,6 +509,25 @@ Cancelamentos em cima da hora podem resultar em avaliação negativa e suspensã
 </div>
 </div></div>
 
+<!-- PRO CHAT MODAL -->
+<div class="mo" id="proChatM"><div class="md chat-md" style="max-width:480px">
+<div class="chat-hdr">
+  <div class="chat-hdr-info">
+    <div class="chat-av" id="proChatAv">👤</div>
+    <div>
+      <div class="chat-nm" id="proChatNm">Cliente</div>
+      <div style="font-size:.75rem;color:var(--text2)" id="proChatSvc"></div>
+    </div>
+  </div>
+  <button class="md-close" onclick="closeProChat()" style="position:static;margin-left:auto">✕</button>
+</div>
+<div class="chat-msgs" id="proChatMsgs"></div>
+<div class="chat-inp">
+  <input type="text" id="proChatIn" placeholder="Responda ao cliente..." onkeydown="if(event.key==='Enter')sendProMsg()">
+  <button onclick="sendProMsg()">➤</button>
+</div>
+</div></div>
+
 <!-- CHAT MODAL -->
 <div class="mo" id="chatM"><div class="md chat-md">
 <div class="chat-hdr">
