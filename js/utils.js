@@ -85,9 +85,18 @@ document.addEventListener('input', e => {
 
 // === MISC ===
 function heroSearchAction() {
-  if (!reqLogin()) return;
-  const q = document.getElementById('heroSearch').value.toLowerCase();
-  const m = CATS.find(c => norm(c.n).includes(norm(q)));
-  if (m) openSvc(m.n); else openM('bookM');
+  const q = document.getElementById('heroSearch').value.trim();
+  if (!q) { openM('bookM'); return; }
+  // Tenta encontrar especialidade pelo nome
+  const qn = q.toLowerCase();
+  const match = CATS.find(c => c.n.toLowerCase().includes(qn) || qn.includes(c.n.toLowerCase().split(' ')[0]));
+  // Preenche filtros da seção de profissionais e rola até ela
+  const specFilter = document.getElementById('prosSpecFilter');
+  const nameInput = document.getElementById('prosNameSearch');
+  if (specFilter && match) { specFilter.value = match.n === 'Montagem' ? 'Montagem de móveis' : (match.n === 'Faxina' ? 'Faxina / Diarista' : match.n); }
+  if (nameInput && !match) nameInput.value = q;
+  if (typeof searchProsList === 'function') searchProsList();
+  const sec = document.getElementById('profissionais');
+  if (sec) sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 function showMyBookings() { toast('Em breve: histórico!', 'inf'); }

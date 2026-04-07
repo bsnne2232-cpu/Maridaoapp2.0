@@ -67,6 +67,7 @@ auth.onAuthStateChanged(async u => {
   }
   updNav();
   if (typeof initProForm === 'function') initProForm();
+  if (typeof loadUserFavorites === 'function') loadUserFavorites();
   if (u && typeof checkIfProfessional === 'function') {
     checkIfProfessional().catch(e => console.error('Pro check error:', e));
   }

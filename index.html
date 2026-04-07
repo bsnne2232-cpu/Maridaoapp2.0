@@ -73,10 +73,34 @@
 </div>
 </section>
 
-<!-- FEATURED PROS -->
+<!-- PROFESSIONALS SEARCH -->
 <section id="profissionais" class="fade-in">
-<div class="stag">Profissionais em destaque</div>
-<h2 class="stitle">Os melhores da sua cidade</h2>
+<div class="stag">Encontre profissionais</div>
+<h2 class="stitle">Busque, favorite e agende</h2>
+<div class="pros-search-bar">
+  <input type="text" id="prosNameSearch" placeholder="Buscar por nome...">
+  <select id="prosSpecFilter" onchange="searchProsList()">
+    <option value="">Todas especialidades</option>
+    <option value="Faxina / Diarista">Faxina / Diarista</option>
+    <option value="Encanamento">Encanamento</option>
+    <option value="Elétrica">Elétrica</option>
+    <option value="Pintura">Pintura</option>
+    <option value="Montagem de móveis">Montagem de móveis</option>
+    <option value="Ar-condicionado">Ar-condicionado</option>
+    <option value="Jardinagem">Jardinagem</option>
+    <option value="Chaveiro">Chaveiro</option>
+    <option value="Pet Sitter">Pet Sitter</option>
+    <option value="Carreto">Carreto</option>
+    <option value="Mudança">Mudança</option>
+  </select>
+  <button class="btn btn-primary" onclick="searchProsList()">🔍 Buscar</button>
+  <button class="btn btn-ghost fav-filter-btn" id="favFilterBtn" onclick="toggleFavFilter()">🤍 Favoritos</button>
+</div>
+<div id="prosLoading" style="display:none;text-align:center;padding:30px;color:var(--text2)">🔍 Buscando profissionais...</div>
+<div id="prosEmpty" style="display:none;text-align:center;padding:48px;color:var(--text2)">
+  <div style="font-size:3rem;margin-bottom:12px">😔</div>
+  <p id="prosEmptyMsg">Nenhum profissional encontrado.</p>
+</div>
 <div class="pros-grid" id="prosGrid"></div>
 </section>
 
