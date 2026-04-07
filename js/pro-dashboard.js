@@ -99,7 +99,15 @@ async function loadProDashboard() {
       if (!list) return;
       list.innerHTML = '';
 
-      const visible = snap.docs.filter(doc => !declinedBookings.has(doc.id));
+      const visible = snap.docs.filter(doc => {
+        if (declinedBookings.has(doc.id)) return false;
+        const d = doc.data();
+        if (CU && Array.isArray(d.declinedBy) && d.declinedBy.includes(CU.uid)) {
+          declinedBookings.add(doc.id); // sincroniza cache local
+          return false;
+        }
+        return true;
+      });
       const noReq = document.getElementById('noRequests');
 
       if (visible.length === 0) {
@@ -213,8 +221,13 @@ async function acceptRequest(bookingId) {
 
 // === DECLINE REQUEST ===
 function declineRequest(bookingId) {
-  if (!confirm('Tem certeza? Este pedido será oferecido a outro profissional.')) return;
   declinedBookings.add(bookingId);
+  // Persiste no Firestore para não voltar ao reabrir o dashboard
+  if (CU) {
+    db.collection('bookings').doc(bookingId).update({
+      declinedBy: firebase.firestore.FieldValue.arrayUnion(CU.uid)
+    }).catch(() => {});
+  }
   const card = document.getElementById('req-' + bookingId);
   if (card) card.remove();
   const list = document.getElementById('requestsList');
