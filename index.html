@@ -154,7 +154,7 @@
 <div class="panel active" id="proS1">
 <div class="fg"><label>Nome completo *</label><input type="text" id="proName" placeholder="Seu nome"></div>
 <div class="fg"><label>E-mail *</label><input type="email" id="proEmail" placeholder="seu@email.com" readonly></div>
-<div class="fg"><label>CEP *</label><input type="text" id="proCep" placeholder="00000-000" maxlength="9"></div>
+<div class="fg"><label>CEP *</label><input type="text" id="proCep" placeholder="00000-000" maxlength="9"><div id="proCepFeedback" style="font-size:.78rem;margin-top:4px"></div></div>
 <button class="btn-next" onclick="proNext(2)">Continuar →</button>
 </div>
 <!-- Step 2: Specialty -->
@@ -484,7 +484,20 @@ Cancelamentos em cima da hora podem resultar em avaliação negativa e suspensã
 <h3>Agendar serviço 📅</h3><p class="msub">Preencha os detalhes obrigatórios.</p>
 <div class="fg"><label>Tipo de serviço *</label><select id="bkSvc" onchange="toggleCarreto()"><option>Encanamento</option><option>Elétrica</option><option>Faxina</option><option>Pintura</option><option>Montagem de móveis</option><option>Ar-condicionado</option><option>Jardinagem</option><option>Chaveiro</option><option>Carreto</option><option>Mudança</option><option>Pet Sitter</option></select></div>
 <div id="normalF">
-<div class="fg"><label>Endereço completo *</label><input type="text" id="bkAddr" placeholder="Rua, número, bairro, cidade"></div>
+<div style="display:flex;gap:8px;align-items:flex-end">
+  <div class="fg" style="flex:1;margin-bottom:0">
+    <label>CEP *</label>
+    <input type="text" id="bkCep" placeholder="00000-000" maxlength="9" oninput="onBkCepInput(this)">
+  </div>
+  <div id="bkCepIco" style="font-size:1.4rem;margin-bottom:14px;min-width:24px"></div>
+</div>
+<div class="fg" id="bkStreetRow" style="display:none">
+  <label>Logradouro</label>
+  <input type="text" id="bkStreet" placeholder="Rua / Avenida" style="background:var(--bg2)">
+</div>
+<div id="bkCityDisp" style="display:none;font-size:.8rem;color:var(--text2);margin:-8px 0 10px 0;padding:6px 10px;background:var(--pl);border-radius:6px"></div>
+<div class="fg"><label>Número e complemento *</label><input type="text" id="bkNum" placeholder="Ex: 42, Apto 3"></div>
+<input type="hidden" id="bkAddr">
 <div class="fr"><div class="fg"><label>Data *</label><input type="date" id="bkDate"></div><div class="fg"><label>Horário *</label><input type="time" id="bkTime"></div></div>
 <div class="fg"><label>Descrição do serviço</label><textarea id="bkDesc" rows="3" placeholder="Descreva o que precisa..."></textarea></div>
 </div>

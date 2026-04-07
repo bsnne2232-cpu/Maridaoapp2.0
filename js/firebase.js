@@ -159,6 +159,7 @@ async function signupStep2() {
   if (!em) return showErr('sEmailErr', 'Digite seu e-mail');
   if (!isValidEmail(em)) return showErr('sEmailErr', 'E-mail inválido');
   if (!cpf || cpf.replace(/\D/g, '').length !== 11) return toast('CPF inválido', 'err');
+  if (!validateCPF(cpf)) return toast('CPF inválido (dígitos verificadores incorretos)', 'err');
   if (pw.length < 8) return showErr('sPassErr', 'Mínimo 8 caracteres');
   if (!/[A-Z]/.test(pw)) return showErr('sPassErr', 'Inclua ao menos uma letra maiúscula');
   if (!/[0-9]/.test(pw)) return showErr('sPassErr', 'Inclua ao menos um número');

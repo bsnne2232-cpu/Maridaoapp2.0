@@ -359,15 +359,65 @@ function validateScheduleDate(ymd) {
   return { ok: true };
 }
 
+// === CEP AUTO-FILL NO FORMULÁRIO DE AGENDAMENTO ===
+let _bkCepData = null; // dados do ViaCEP validado
+
+async function onBkCepInput(el) {
+  const digits = el.value.replace(/\D/g, '');
+  // Aplica máscara CEP
+  el.value = digits.length > 5 ? digits.slice(0, 5) + '-' + digits.slice(5, 8) : digits;
+  const ico = document.getElementById('bkCepIco');
+  const streetRow = document.getElementById('bkStreetRow');
+  const cityDisp = document.getElementById('bkCityDisp');
+  if (digits.length < 8) {
+    _bkCepData = null;
+    ico.textContent = '';
+    if (streetRow) streetRow.style.display = 'none';
+    if (cityDisp) cityDisp.style.display = 'none';
+    return;
+  }
+  ico.textContent = '⏳';
+  const data = await lookupCEP(digits);
+  if (!data) {
+    _bkCepData = null;
+    ico.textContent = '❌';
+    if (streetRow) streetRow.style.display = 'none';
+    if (cityDisp) { cityDisp.style.display = 'none'; }
+    toast('CEP não encontrado. Verifique o número.', 'err');
+    return;
+  }
+  _bkCepData = data;
+  ico.textContent = '✅';
+  const streetEl = document.getElementById('bkStreet');
+  if (streetEl) {
+    streetEl.value = data.logradouro || '';
+    if (streetRow) streetRow.style.display = data.logradouro ? 'block' : 'none';
+  }
+  if (cityDisp) {
+    cityDisp.textContent = '📍 ' + [data.bairro, data.localidade, data.uf].filter(Boolean).join(', ');
+    cityDisp.style.display = 'block';
+  }
+}
+
 function searchPros() {
   const svc = document.getElementById('bkSvc').value, isC = svc === 'Carreto';
   if (!isC) {
-    const a = document.getElementById('bkAddr').value.trim(), d = document.getElementById('bkDate').value, t = document.getElementById('bkTime').value;
-    const m = []; if (!a) m.push('endereço'); if (!d) m.push('data'); if (!t) m.push('horário');
+    const cepDigits = (document.getElementById('bkCep').value || '').replace(/\D/g, '');
+    const num = (document.getElementById('bkNum').value || '').trim();
+    const d = document.getElementById('bkDate').value, t = document.getElementById('bkTime').value;
+    const m = [];
+    if (cepDigits.length !== 8 || !_bkCepData) m.push('CEP válido (aguarde verificação)');
+    if (!num) m.push('número');
+    if (!d) m.push('data');
+    if (!t) m.push('horário');
     if (m.length) { toast('Preencha: ' + m.join(', '), 'err'); return; }
     const dateCheck = validateScheduleDate(d);
     if (!dateCheck.ok) { toast(dateCheck.msg, 'err'); return; }
-    window.bkDetails = { svc, addr: a, date: d, time: t, desc: document.getElementById('bkDesc').value };
+    // Monta endereço completo verificado
+    const street = (document.getElementById('bkStreet').value || _bkCepData.logradouro || '').trim();
+    const addr = [street, num, _bkCepData.bairro, _bkCepData.localidade + '/' + _bkCepData.uf].filter(Boolean).join(', ');
+    document.getElementById('bkAddr').value = addr;
+    window.bkDetails = { svc, addr, date: d, time: t, desc: document.getElementById('bkDesc').value };
   } else {
     const f = document.getElementById('cFrom').value.trim(), t = document.getElementById('cTo').value.trim(), d = document.getElementById('cDate').value, tm = document.getElementById('cTime').value;
     const m = []; if (!f) m.push('cidade de retirada'); if (!t) m.push('cidade de entrega'); if (!d) m.push('data'); if (!tm) m.push('horário');

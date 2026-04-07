@@ -75,13 +75,41 @@ document.addEventListener('input', e => {
   if (e.target.id === 'cardCvv') {
     e.target.value = e.target.value.replace(/\D/g, '').slice(0, 4);
   }
-  // CEP mask
+  // CEP mask (pro form — bkCep is handled by onBkCepInput)
   if (e.target.id === 'proCep') {
     let v = e.target.value.replace(/\D/g, ''); if (v.length > 8) v = v.slice(0, 8);
     if (v.length > 5) v = v.slice(0, 5) + '-' + v.slice(5);
     e.target.value = v;
+    // Trigger ViaCEP lookup quando completo
+    if (v.replace(/\D/g, '').length === 8) onProCepComplete(v);
   }
 });
+
+// === CPF VALIDATION (algoritmo dígitos verificadores) ===
+function validateCPF(cpf) {
+  cpf = cpf.replace(/\D/g, '');
+  if (cpf.length !== 11 || /^(\d)\1+$/.test(cpf)) return false;
+  let sum = 0, rem;
+  for (let i = 0; i < 9; i++) sum += +cpf[i] * (10 - i);
+  rem = (sum * 10) % 11; if (rem >= 10) rem = 0;
+  if (rem !== +cpf[9]) return false;
+  sum = 0;
+  for (let i = 0; i < 10; i++) sum += +cpf[i] * (11 - i);
+  rem = (sum * 10) % 11; if (rem >= 10) rem = 0;
+  return rem === +cpf[10];
+}
+
+// === CEP LOOKUP via ViaCEP (gratuito, sem autenticação) ===
+async function lookupCEP(cep) {
+  const c = cep.replace(/\D/g, '');
+  if (c.length !== 8) return null;
+  try {
+    const res = await fetch('https://viacep.com.br/ws/' + c + '/json/', { signal: AbortSignal.timeout(6000) });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.erro ? null : data;
+  } catch (e) { return null; }
+}
 
 // === MISC ===
 function heroSearchAction() {

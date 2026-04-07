@@ -1,3 +1,21 @@
+// === CEP VALIDATION (profissional) ===
+let _proCepData = null;
+let _proCepEl = null;
+
+async function onProCepComplete(cep) {
+  _proCepData = null;
+  const feedback = document.getElementById('proCepFeedback');
+  if (feedback) { feedback.textContent = '⏳ Verificando CEP...'; feedback.style.color = 'var(--text2)'; }
+  const data = await lookupCEP(cep);
+  if (!data) {
+    if (feedback) { feedback.textContent = '❌ CEP não encontrado'; feedback.style.color = 'var(--red)'; }
+    return;
+  }
+  _proCepData = data;
+  const addr = [data.logradouro, data.bairro, data.localidade + '/' + data.uf].filter(Boolean).join(', ');
+  if (feedback) { feedback.textContent = '✅ ' + addr; feedback.style.color = 'var(--green)'; }
+}
+
 // === PRO FORM AUTO-FILL ===
 function initProForm() {
   if (CU) {
@@ -52,7 +70,8 @@ function proNext(s) {
     const nm = document.getElementById('proName').value.trim();
     const cep = document.getElementById('proCep').value.trim();
     if (!nm || nm.length < 3) m.push('nome (mín. 3 caracteres)');
-    if (!cep || cep.replace(/\D/g, '').length !== 8) m.push('CEP válido');
+    if (!cep || cep.replace(/\D/g, '').length !== 8) m.push('CEP');
+    else if (!_proCepData) { toast('Aguarde a verificação do CEP ou verifique o número', 'err'); return; }
     if (m.length) { toast('Preencha: ' + m.join(', '), 'err'); return; }
   }
   document.querySelectorAll('.form-card .panel').forEach(p => p.classList.remove('active'));
@@ -118,6 +137,7 @@ async function submitProDocs() {
   const dob = document.getElementById('dDob').value;
   const pix = document.getElementById('dPix').value.trim();
   if (!cpf || cpf.replace(/\D/g, '').length !== 11) return toast('CPF inválido', 'err');
+  if (!validateCPF(cpf)) return toast('CPF inválido (dígitos verificadores incorretos)', 'err');
   if (!dob) return toast('Preencha data de nascimento', 'err');
   const dobDate = new Date(dob);
   const age = (Date.now() - dobDate.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
