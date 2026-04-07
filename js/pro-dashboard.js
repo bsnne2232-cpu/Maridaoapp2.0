@@ -101,11 +101,14 @@ function renderRequestCard(bookingId, booking) {
   const card = document.createElement('div');
   card.className = 'pro-request-card';
   card.id = 'req-' + bookingId;
+  const clientName = esc(booking.userName || (booking.userEmail ? booking.userEmail.split('@')[0] : 'Cliente'));
+
   card.innerHTML =
     '<div style="display:flex;justify-content:space-between;align-items:start;gap:12px">' +
       '<div style="flex:1">' +
         '<h4 style="margin:0 0 8px 0">' + esc(booking.details && booking.details.svc ? booking.details.svc : (booking.service || 'Serviço')) + '</h4>' +
         '<div class="pro-request-info">' +
+          '<div>👤 ' + clientName + '</div>' +
           '<div>📍 ' + addr + '</div>' +
           '<div>📅 ' + date + ' às ' + time + '</div>' +
           '<div>⏱️ ' + esc(timeStr) + '</div>' +
@@ -116,6 +119,7 @@ function renderRequestCard(bookingId, booking) {
         '<div style="font-size:.75rem;color:var(--text2);margin-bottom:4px">Estimativa</div>' +
         '<div style="font-size:1.3rem;font-weight:800;color:var(--p);margin-bottom:12px">R$ ' + esc(String(rate)) + '</div>' +
         '<div style="display:flex;gap:8px;flex-direction:column">' +
+          '<button class="btn-chat" onclick="openProChat(\'' + bookingId + '\')">💬 Conversar</button>' +
           '<button class="btn-accept" onclick="acceptRequest(\'' + bookingId + '\')">✅ Aceitar</button>' +
           '<button class="btn-decline" onclick="declineRequest(\'' + bookingId + '\')">❌ Recusar</button>' +
         '</div>' +
@@ -212,6 +216,7 @@ async function loadAcceptedRequests() {
 
     snap.forEach(doc => {
       const booking = doc.data();
+      const bookingId = doc.id;
       let statusBadge = '⏳ Aguardando pagamento';
       let statusColor = '#EAB308';
       if (booking.status === 'payment_confirmed') {
@@ -224,6 +229,7 @@ async function loadAcceptedRequests() {
 
       const price = booking.price ? 'R$ ' + booking.price.toFixed(2) : '—';
       const addr = esc(booking.details && booking.details.addr ? booking.details.addr : 'Local não informado');
+      const clientName = esc(booking.userName || (booking.userEmail ? booking.userEmail.split('@')[0] : 'Cliente'));
 
       const card = document.createElement('div');
       card.className = 'pro-request-card';
@@ -231,11 +237,13 @@ async function loadAcceptedRequests() {
         '<div style="display:flex;justify-content:space-between;align-items:start;gap:12px">' +
           '<div style="flex:1">' +
             '<h4 style="margin:0 0 4px 0">' + esc(booking.service || '—') + '</h4>' +
-            '<div style="font-size:.85rem;color:var(--text2);margin-bottom:8px">' + addr + '</div>' +
+            '<div style="font-size:.85rem;color:var(--text2);margin-bottom:4px">👤 ' + clientName + '</div>' +
+            '<div style="font-size:.85rem;color:var(--text2);margin-bottom:8px">📍 ' + addr + '</div>' +
             '<div style="display:inline-block;padding:4px 8px;border-radius:4px;font-size:.75rem;font-weight:700;background:' + statusColor + '22;color:' + statusColor + '">' + statusBadge + '</div>' +
           '</div>' +
-          '<div style="text-align:right;flex-shrink:0">' +
-            '<div style="font-size:1.3rem;font-weight:800;color:var(--p);margin-bottom:12px">' + price + '</div>' +
+          '<div style="text-align:right;flex-shrink:0;display:flex;flex-direction:column;align-items:flex-end;gap:8px">' +
+            '<div style="font-size:1.3rem;font-weight:800;color:var(--p)">' + price + '</div>' +
+            '<button class="btn-chat" onclick="openProChat(\'' + bookingId + '\')">💬 Conversar</button>' +
           '</div>' +
         '</div>';
 
@@ -511,4 +519,99 @@ function cleanupProDashboard() {
     proRequestsListener();
     proRequestsListener = null;
   }
+  if (_proChatListener) {
+    _proChatListener();
+    _proChatListener = null;
+  }
+}
+
+// === PRO CHAT (real-time) ===
+let _proChatListener = null;
+let _proChatBookingId = null;
+let _proSeenMsgIds = new Set();
+
+async function openProChat(bookingId) {
+  if (!CU || !currentProfessional) return;
+  _proChatBookingId = bookingId;
+  _proSeenMsgIds = new Set();
+  if (_proChatListener) { _proChatListener(); _proChatListener = null; }
+
+  document.getElementById('proChatMsgs').innerHTML = '';
+  document.getElementById('proChatNm').textContent = 'Cliente';
+  document.getElementById('proChatAddr').textContent = '';
+  document.getElementById('proChatSvc').textContent = '';
+  document.getElementById('proChatAv').textContent = '👤';
+  openM('proChatM');
+
+  // Fetch booking details for header
+  try {
+    const bkSnap = await db.collection('bookings').doc(bookingId).get();
+    if (bkSnap.exists) {
+      const bk = bkSnap.data();
+      const name = bk.userName || (bk.userEmail ? bk.userEmail.split('@')[0] : 'Cliente');
+      document.getElementById('proChatNm').textContent = name;
+      document.getElementById('proChatAv').textContent = name.charAt(0).toUpperCase();
+      const addr = (bk.details && bk.details.addr) || bk.addr || '';
+      document.getElementById('proChatAddr').textContent = addr ? '📍 ' + addr : '';
+      const svc = (bk.details && bk.details.svc) || bk.service || '';
+      document.getElementById('proChatSvc').textContent = svc;
+    }
+  } catch (e) {
+    console.error('booking fetch error:', e);
+  }
+
+  // Real-time listener for ALL messages on this booking
+  _proChatListener = db.collection('messages')
+    .where('bookingId', '==', bookingId)
+    .onSnapshot(snap => {
+      const docs = [];
+      snap.forEach(doc => docs.push({ id: doc.id, ...doc.data() }));
+      docs.sort((a, b) => (a.seq || 0) - (b.seq || 0));
+      const m = document.getElementById('proChatMsgs');
+      docs.forEach(d => {
+        if (_proSeenMsgIds.has(d.id)) return;
+        _proSeenMsgIds.add(d.id);
+        let cls;
+        if (d.sender === 'sys') cls = 'sys';
+        else if (d.sender === 'pro') cls = 'sent';
+        else cls = 'recv';
+        const div = document.createElement('div');
+        div.className = 'cmsg ' + cls;
+        div.textContent = d.text;
+        m.appendChild(div);
+      });
+      m.scrollTop = m.scrollHeight;
+    }, err => console.error('pro chat listener:', err));
+}
+
+function closeProChat() {
+  if (_proChatListener) { _proChatListener(); _proChatListener = null; }
+  _proChatBookingId = null;
+  _proSeenMsgIds = new Set();
+  closeM('proChatM');
+}
+
+function sendProMsg() {
+  const inp = document.getElementById('proChatIn'), msg = inp.value.trim();
+  if (!msg || !_proChatBookingId || !CU || !currentProfessional) return;
+  inp.value = '';
+  // Block external contacts (reuse global BLOCK from chat.js)
+  if (typeof BLOCK !== 'undefined' && BLOCK.some(p => p.test(msg))) {
+    const m = document.getElementById('proChatMsgs');
+    const blk = document.createElement('div');
+    blk.className = 'cmsg blk';
+    blk.textContent = '⛔ Contato externo bloqueado';
+    m.appendChild(blk);
+    m.scrollTop = m.scrollHeight;
+    return;
+  }
+  db.collection('messages').add({
+    bookingId: _proChatBookingId,
+    text: msg,
+    sender: 'pro',
+    proName: currentProfessional.name,
+    proId: CU.uid,
+    seq: Date.now(),
+    at: firebase.firestore.FieldValue.serverTimestamp()
+  }).catch(e => console.error('sendProMsg error:', e));
 }
