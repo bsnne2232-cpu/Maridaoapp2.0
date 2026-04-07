@@ -3,30 +3,67 @@ let currentProfessional = null;
 let proRequestsListener = null;
 const declinedBookings = new Set();
 
-// === DETECT IF USER IS PROFESSIONAL ===
+// === DETECTAR SE É PROFISSIONAL ===
 async function checkIfProfessional() {
   if (!CU) return;
   try {
-    const snap = await db.collection('professionals')
-      .where('email', '==', CU.email)
+    // Busca por UID primeiro, fallback por email
+    let snap = await db.collection('professionals')
+      .where('uid', '==', CU.uid)
       .limit(1)
       .get();
+
+    if (snap.empty) {
+      snap = await db.collection('professionals')
+        .where('email', '==', CU.email)
+        .limit(1)
+        .get();
+    }
 
     if (!snap.empty) {
       snap.forEach(doc => {
         currentProfessional = { id: doc.id, ...doc.data() };
       });
-      // Show dashboard link in dropdown
-      const btn = document.getElementById('proDashLink');
-      if (btn) btn.style.display = 'block';
+      showProView();
     } else {
       currentProfessional = null;
+      // Garante que a view de cliente apareça se não for profissional
+      const proView = document.getElementById('proView');
+      const clientView = document.getElementById('clientView');
+      if (proView) proView.style.display = 'none';
+      if (clientView) clientView.style.display = '';
       const btn = document.getElementById('proDashLink');
       if (btn) btn.style.display = 'none';
     }
   } catch (e) {
     console.error('Erro ao verificar profissional:', e);
   }
+}
+
+// === TROCAR PARA VIEW DO PROFISSIONAL ===
+function showProView() {
+  document.getElementById('clientView').style.display = 'none';
+  document.getElementById('proView').style.display = 'block';
+  // Esconder links de cliente no nav, mostrar link de dashboard
+  const navLinks = document.querySelector('.nav-links');
+  if (navLinks) navLinks.style.display = 'none';
+  const proDashLink = document.getElementById('proDashLink');
+  if (proDashLink) proDashLink.style.display = 'none'; // não precisa mais no dropdown
+  const clientBookingsLink = document.getElementById('clientBookingsLink');
+  if (clientBookingsLink) clientBookingsLink.style.display = 'none';
+  window.scrollTo(0, 0);
+  loadProDashboard();
+}
+
+// === VOLTAR PARA VIEW DO CLIENTE ===
+function showClientView() {
+  document.getElementById('proView').style.display = 'none';
+  document.getElementById('clientView').style.display = '';
+  const navLinks = document.querySelector('.nav-links');
+  if (navLinks) navLinks.style.display = '';
+  const clientBookingsLink = document.getElementById('clientBookingsLink');
+  if (clientBookingsLink) clientBookingsLink.style.display = '';
+  window.scrollTo(0, 0);
 }
 
 // === LOAD DASHBOARD ===
@@ -505,10 +542,12 @@ function switchProTab(tab) {
   if (activeBtn) activeBtn.classList.add('active');
 }
 
-// === CLEANUP ===
+// === CLEANUP (chamado no logout) ===
 function cleanupProDashboard() {
   if (proRequestsListener) {
     proRequestsListener();
     proRequestsListener = null;
   }
+  currentProfessional = null;
+  showClientView();
 }
