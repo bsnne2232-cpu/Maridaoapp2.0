@@ -250,14 +250,14 @@ footer a{display:block;font-size:.8rem;padding:3px 0;transition:color .2s}footer
 .pro-tab-content.active{display:block}
 .pro-request-card{border:1px solid var(--border);border-radius:var(--rs);padding:16px;background:var(--bg2)}
 .pro-request-info{display:flex;flex-direction:column;gap:6px;font-size:.85rem;color:var(--text2);margin-top:4px}
-.btn-accept,.btn-decline{padding:9px 14px;border:none;border-radius:6px;font-weight:600;cursor:pointer;transition:all .2s;font-size:.85rem;font-family:var(--font)}
+.btn-accept,.btn-decline,.btn-chat{padding:9px 14px;border:none;border-radius:6px;font-weight:600;cursor:pointer;transition:all .2s;font-size:.85rem;font-family:var(--font)}
 .btn-accept{background:#10B981;color:#fff}
 .btn-accept:hover{background:#059669;transform:translateY(-1px)}
 .btn-accept:disabled{opacity:.6;cursor:not-allowed;transform:none}
-.btn-chat{background:#6366f1;color:#fff}
-.btn-chat:hover{background:#4f46e5;transform:translateY(-1px)}
 .btn-decline{background:#EF4444;color:#fff}
 .btn-decline:hover{background:#DC2626;transform:translateY(-1px)}
+.btn-chat{background:#4F46E5;color:#fff}
+.btn-chat:hover{background:#4338CA;transform:translateY(-1px)}
 .earnings-card{border:1px solid var(--border);border-radius:var(--rs);padding:16px;background:var(--bg2)}
 .profile-section{margin-bottom:24px;padding-bottom:20px;border-bottom:1px solid var(--border)}
 .profile-section:last-child{border-bottom:none;margin-bottom:0}
