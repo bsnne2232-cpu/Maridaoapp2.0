@@ -24,6 +24,7 @@ const BLOCK = [
 // === REAL-TIME CHAT STATE ===
 let _chatListener = null;
 let _seenMsgIds = new Set();
+let _lastProPrice = 0; // último preço mencionado pelo profissional
 
 // === OPEN CHAT (CLIENT SIDE) ===
 async function openChat(p, s) {
@@ -31,6 +32,7 @@ async function openChat(p, s) {
   chatSt = { msgs: 0, details: { what: false, where: false, when: false }, agreed: false, price: 0 };
   window.currentBookingId = null;
   _seenMsgIds = new Set();
+  _lastProPrice = 0;
   if (_chatListener) { _chatListener(); _chatListener = null; }
 
   document.getElementById('chatAv').textContent = p.e;
@@ -113,6 +115,11 @@ function renderChatSnapshot(snap) {
     if (d.sender === 'sys') cls = 'sys';
     else if (d.sender === 'user') cls = 'sent';
     else cls = 'recv'; // pro
+    // Rastreia último preço mencionado pelo profissional
+    if (d.sender === 'pro') {
+      const pm = d.text.match(/(\d{2,})/);
+      if (pm) _lastProPrice = parseInt(pm[1]);
+    }
     addMsg(d.text, cls);
   });
 }
@@ -149,32 +156,33 @@ function sendMsg() {
   }).catch(e => console.error('sendMsg error:', e));
   chatSt.msgs++;
 
-  // Detect price agreement
+  // Detect price agreement — aceita número na mensagem OU preço que o pro mencionou
   const lo = msg.toLowerCase();
   const pm = msg.match(/(\d{2,})/);
-  if (pm && /\b(topo|fechado?|fechar|ok|combinado|aceito|fecha|bora|sim|concordo|beleza|blz|topei|reais|r\$)\b/i.test(lo)) {
-    const pr = parseInt(pm[1]);
-    if (pr >= 20 && !chatSt.agreed) {
-      chatSt.agreed = true; chatSt.price = pr; agreedPrice = pr;
-      const summaryTxt = '📋 Valor combinado: R$ ' + pr + '\n• Comissão plataforma (25%): R$ ' + (pr * .25).toFixed(0) + '\n• Profissional recebe: R$ ' + (pr * .75).toFixed(0) + '\n\nPode pagar abaixo!';
-      // Save as sys message so both sides see it
-      db.collection('messages').add({
-        bookingId: window.currentBookingId,
-        text: summaryTxt,
-        sender: 'sys',
-        userId: CU.uid,
-        seq: Date.now() + 1,
-        at: firebase.firestore.FieldValue.serverTimestamp()
-      }).catch(() => {});
-      // Update booking with agreed price
-      db.collection('bookings').doc(window.currentBookingId).update({
-        agreedPrice: pr,
-        priceAgreedAt: firebase.firestore.FieldValue.serverTimestamp()
-      }).catch(() => {});
-      // Show pay button
-      document.getElementById('chatPay').classList.add('show');
-      document.getElementById('cpPrice').textContent = 'R$ ' + pr + ',00';
-    }
+  const prFromMsg = pm ? parseInt(pm[1]) : 0;
+  const prFromPro = _lastProPrice;
+  const hasAgreementWord = /\b(topo|fechado?|fechar|ok|combinado|aceito|fecha|bora|sim|concordo|beleza|blz|topei|reais|r\$|certo|claro|pode|perfeito|ótimo|otimo|valeu|firmeza|embora|vai)\b/i.test(lo);
+  const pr = prFromMsg >= 20 ? prFromMsg : (hasAgreementWord && prFromPro >= 20 ? prFromPro : 0);
+  if (pr >= 20 && !chatSt.agreed && hasAgreementWord) {
+    chatSt.agreed = true; chatSt.price = pr; agreedPrice = pr;
+    const summaryTxt = '📋 Valor combinado: R$ ' + pr + '\n• Comissão plataforma (25%): R$ ' + (pr * .25).toFixed(0) + '\n• Profissional recebe: R$ ' + (pr * .75).toFixed(0) + '\n\nPode pagar abaixo!';
+    // Save as sys message so both sides see it
+    db.collection('messages').add({
+      bookingId: window.currentBookingId,
+      text: summaryTxt,
+      sender: 'sys',
+      userId: CU.uid,
+      seq: Date.now() + 1,
+      at: firebase.firestore.FieldValue.serverTimestamp()
+    }).catch(() => {});
+    // Update booking with agreed price
+    db.collection('bookings').doc(window.currentBookingId).update({
+      agreedPrice: pr,
+      priceAgreedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }).catch(() => {});
+    // Show pay button
+    document.getElementById('chatPay').classList.add('show');
+    document.getElementById('cpPrice').textContent = 'R$ ' + pr + ',00';
   }
 }
 
