@@ -84,21 +84,29 @@ function reqLogin() {
   return true;
 }
 
-// === GOOGLE LOGIN ===
+// === GOOGLE LOGIN (redirect — avoids popup/CSP issues) ===
 async function googleLogin() {
   const btns = document.querySelectorAll('.btn-google');
   btns.forEach(b => { b.disabled = true; b.style.opacity = '.6'; });
   try {
-    await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());
-    closeM('loginM'); closeM('signupM');
-    toast('Login realizado! 🎉', 'ok');
+    await auth.signInWithRedirect(new firebase.auth.GoogleAuthProvider());
   } catch (e) {
-    const ignored = ['auth/popup-closed-by-user', 'auth/cancelled-popup-request'];
-    if (!ignored.includes(e.code)) toast('Erro ao fazer login com Google. Tente novamente.', 'err');
-  } finally {
+    toast('Erro ao iniciar login com Google. Tente novamente.', 'err');
     btns.forEach(b => { b.disabled = false; b.style.opacity = ''; });
   }
 }
+
+// Handle redirect result on page load
+auth.getRedirectResult().then(result => {
+  if (result && result.user) {
+    closeM('loginM'); closeM('signupM');
+    toast('Login realizado! 🎉', 'ok');
+  }
+}).catch(e => {
+  if (e.code && e.code !== 'auth/no-auth-event') {
+    toast('Erro no login com Google. Tente novamente.', 'err');
+  }
+});
 
 // === EMAIL LOGIN ===
 async function emailLogin() {
