@@ -15,14 +15,18 @@ function renderCats() {
 }
 
 function openSvc(s) {
-  if (!reqLogin()) return;
-  const sel = document.getElementById('bkSvc');
-  for (let i = 0; i < sel.options.length; i++) {
-    if (sel.options[i].text === s || (sel.options[i].text === 'Montagem de móveis' && s === 'Montagem')) {
-      sel.selectedIndex = i; break;
+  // Filtra a seção de profissionais pela especialidade clicada
+  const specFilter = document.getElementById('prosSpecFilter');
+  if (specFilter) {
+    const map = { 'Montagem': 'Montagem de móveis', 'Faxina': 'Faxina / Diarista' };
+    const val = map[s] || s;
+    for (let i = 0; i < specFilter.options.length; i++) {
+      if (specFilter.options[i].value === val) { specFilter.selectedIndex = i; break; }
     }
+    if (typeof searchProsList === 'function') searchProsList();
   }
-  toggleCarreto(); bkGo(1); openM('bookM');
+  const sec = document.getElementById('profissionais');
+  if (sec) sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 // === PROFESSIONALS DATABASE ===
@@ -84,19 +88,233 @@ const PDB = {
   ]
 };
 
-function renderPros() {
-  const f = [PDB['Encanamento'][0], PDB['Elétrica'][0], PDB['Faxina'][0]];
-  document.getElementById('prosGrid').innerHTML = f.map(p =>
-    `<div class="pro-card"><div class="pro-hdr"><div class="pro-av">${esc(p.e)}</div><div><div class="pro-nm">${esc(p.n)}</div><div class="pro-rl">${esc(p.t[0])}</div></div></div><div class="pro-rt">★ ${esc(String(p.r))} (${esc(String(p.rv))})</div><div class="pro-tags">${p.t.map(t => `<span>${esc(t)}</span>`).join('')}</div><div class="pro-pr">A partir de <b>R$ ${esc(String(p.p))}</b></div><button class="btn-book" onclick="quickBook('${esc(p.n)}')">Agendar</button></div>`
-  ).join('');
+// === FAVORITES STATE ===
+let userFavorites = new Set();
+let showingFavs = false;
+
+async function loadUserFavorites() {
+  if (!CU) { userFavorites = new Set(); return; }
+  try {
+    const doc = await db.collection('users').doc(CU.uid).get();
+    const favs = (doc.exists && doc.data().favorites) ? doc.data().favorites : [];
+    userFavorites = new Set(favs);
+    // Atualiza corações já visíveis
+    document.querySelectorAll('.fav-btn[data-pid]').forEach(btn => {
+      const pid = btn.dataset.pid;
+      btn.textContent = userFavorites.has(pid) ? '❤️' : '🤍';
+      btn.classList.toggle('faved', userFavorites.has(pid));
+    });
+  } catch (e) { console.warn('Favorites load failed:', e); }
 }
 
-function quickBook(nm) {
+async function toggleFavorite(proId, proName) {
   if (!reqLogin()) return;
-  for (const [s, ps] of Object.entries(PDB)) {
-    const f = ps.find(p => p.n === nm);
-    if (f) { openSvc(s); return; } // Passa pelo fluxo completo (data, endereço, etc.)
+  const isFaved = userFavorites.has(proId);
+  try {
+    if (isFaved) {
+      userFavorites.delete(proId);
+      await db.collection('users').doc(CU.uid).update({
+        favorites: firebase.firestore.FieldValue.arrayRemove(proId)
+      });
+      toast('Removido dos favoritos', 'ok');
+    } else {
+      userFavorites.add(proId);
+      await db.collection('users').doc(CU.uid).update({
+        favorites: firebase.firestore.FieldValue.arrayUnion(proId)
+      });
+      toast(proName + ' favoritado ❤️', 'ok');
+    }
+    const btn = document.querySelector('.fav-btn[data-pid="' + CSS.escape(proId) + '"]');
+    if (btn) {
+      btn.textContent = userFavorites.has(proId) ? '❤️' : '🤍';
+      btn.classList.toggle('faved', userFavorites.has(proId));
+    }
+    if (showingFavs) renderFavoritesList();
+  } catch (e) { toast('Erro ao atualizar favoritos', 'err'); }
+}
+
+function toggleFavFilter() {
+  showingFavs = !showingFavs;
+  const btn = document.getElementById('favFilterBtn');
+  if (btn) {
+    btn.textContent = showingFavs ? '❤️ Favoritos' : '🤍 Favoritos';
+    btn.classList.toggle('active-fav', showingFavs);
   }
+  if (showingFavs) renderFavoritesList();
+  else searchProsList();
+}
+
+async function renderFavoritesList() {
+  if (!CU) { reqLogin(); return; }
+  const grid = document.getElementById('prosGrid');
+  const emptyEl = document.getElementById('prosEmpty');
+  const msgEl = document.getElementById('prosEmptyMsg');
+  if (!grid) return;
+  grid.innerHTML = '';
+  if (userFavorites.size === 0) {
+    if (emptyEl) emptyEl.style.display = 'block';
+    if (msgEl) msgEl.textContent = 'Você ainda não favoritou nenhum profissional.';
+    return;
+  }
+  if (emptyEl) emptyEl.style.display = 'none';
+  // Busca cada favorito no Firestore (até 10)
+  const pros = [];
+  for (const pid of Array.from(userFavorites).slice(0, 10)) {
+    if (pid.startsWith('static_')) {
+      // É um pro estático do PDB
+      const name = pid.replace('static_', '');
+      for (const [spec, list] of Object.entries(PDB)) {
+        const found = list.find(p => p.n === name);
+        if (found) { pros.push({ _static: true, id: pid, name: found.n, spec, rate: found.p || 0, icon: found.e, rating: found.r, reviewCount: found.rv, dist: found.d, tags: found.t, top: found.top }); break; }
+      }
+    } else {
+      try {
+        const doc = await db.collection('professionals').doc(pid).get();
+        if (doc.exists) pros.push({ id: doc.id, ...doc.data(), _fromFirestore: true });
+      } catch (_) {}
+    }
+  }
+  renderProCards(pros);
+}
+
+// === BUSCAR PROFISSIONAIS NA SEÇÃO PRINCIPAL ===
+async function searchProsList() {
+  showingFavs = false;
+  const btn = document.getElementById('favFilterBtn');
+  if (btn) { btn.textContent = '🤍 Favoritos'; btn.classList.remove('active-fav'); }
+
+  const nameFilter = (document.getElementById('prosNameSearch') ? document.getElementById('prosNameSearch').value : '').trim().toLowerCase();
+  const specFilter = document.getElementById('prosSpecFilter') ? document.getElementById('prosSpecFilter').value : '';
+
+  const loadEl = document.getElementById('prosLoading');
+  const emptyEl = document.getElementById('prosEmpty');
+  const grid = document.getElementById('prosGrid');
+  if (loadEl) loadEl.style.display = 'block';
+  if (emptyEl) emptyEl.style.display = 'none';
+  if (grid) grid.innerHTML = '';
+
+  const pros = [];
+
+  // Busca reais no Firestore (todos ativos, independente de docs)
+  try {
+    let q = db.collection('professionals').where('status', '==', 'active');
+    if (specFilter) q = q.where('spec', '==', specFilter);
+    const snap = await q.limit(24).get();
+    snap.forEach(doc => {
+      const d = doc.data();
+      if (!nameFilter || (d.name || '').toLowerCase().includes(nameFilter)) {
+        pros.push({ id: doc.id, ...d, _fromFirestore: true });
+      }
+    });
+  } catch (e) { console.warn('Firestore pro search:', e); }
+
+  // Fallback / complemento com dados estáticos do PDB
+  if (pros.length < 6) {
+    for (const [spec, list] of Object.entries(PDB)) {
+      if (specFilter && spec !== specFilter) continue;
+      for (const p of list) {
+        if (nameFilter && !p.n.toLowerCase().includes(nameFilter)) continue;
+        // Evita duplicata por nome
+        if (pros.some(x => (x.name || x.n) === p.n)) continue;
+        pros.push({ _static: true, id: 'static_' + p.n, name: p.n, spec, rate: p.p || 0, icon: p.e, rating: p.r, reviewCount: p.rv, dist: p.d, tags: p.t, top: p.top });
+      }
+    }
+  }
+
+  if (loadEl) loadEl.style.display = 'none';
+  renderProCards(pros);
+}
+
+// === RENDERIZAR CARDS DE PROFISSIONAIS ===
+function renderProCards(pros) {
+  const grid = document.getElementById('prosGrid');
+  const emptyEl = document.getElementById('prosEmpty');
+  const msgEl = document.getElementById('prosEmptyMsg');
+  if (!grid) return;
+  grid.innerHTML = '';
+  if (pros.length === 0) {
+    if (emptyEl) emptyEl.style.display = 'block';
+    if (msgEl) msgEl.textContent = 'Nenhum profissional encontrado.';
+    return;
+  }
+  if (emptyEl) emptyEl.style.display = 'none';
+
+  pros.forEach(p => {
+    const pid = p.id || ('static_' + (p.name || p.n));
+    const isFaved = userFavorites.has(pid);
+    const name = p.name || p.n || '—';
+    const spec = p.spec || '—';
+    const rate = p.rate || p.p || 0;
+    const icon = p.icon || p.e || '👤';
+    const rating = p.rating || p.r || null;
+    const reviews = p.reviewCount || p.rv || 0;
+    const dist = p.dist || p.d || '';
+    const tags = p.tags || (p.bio ? p.bio.split(',').slice(0, 3) : (p.t ? p.t : []));
+    const isTop = p.top;
+
+    const card = document.createElement('div');
+    card.className = 'pro-card';
+
+    const isVerified = p.docsStatus === 'approved';
+    const isPending = p.docsStatus === 'pending';
+    const verifiedBadge = isVerified ? ' ✅' : (isPending ? ' 🟡' : '');
+    const tagsHtml = tags.slice(0, 3).map(t => '<span>' + esc(String(t).trim()) + '</span>').join('');
+    const ratingHtml = rating ? '<div class="pro-rt">★ ' + esc(String(rating)) + (reviews ? ' <span style="font-weight:400;color:var(--text2)">(' + esc(String(reviews)) + ')</span>' : '') + '</div>' : '';
+    const distHtml = dist ? '<div style="font-size:.78rem;color:var(--text2);margin-bottom:8px">📍 ' + esc(String(dist)) + '</div>' : '';
+    const priceHtml = rate ? '<div class="pro-pr">A partir de <b>R$ ' + esc(String(rate)) + '</b></div>' : '';
+
+    card.innerHTML =
+      '<div class="pro-hdr">' +
+        '<div class="pro-av">' + esc(String(icon)) + '</div>' +
+        '<div style="flex:1;min-width:0">' +
+          '<div class="pro-nm">' + esc(name) + (isTop ? ' ⭐' : '') + verifiedBadge + '</div>' +
+          '<div class="pro-rl">' + esc(spec) + '</div>' +
+        '</div>' +
+        '<button class="fav-btn' + (isFaved ? ' faved' : '') + '" data-pid="' + esc(pid) + '" title="' + (isFaved ? 'Remover favorito' : 'Favoritar') + '">' + (isFaved ? '❤️' : '🤍') + '</button>' +
+      '</div>' +
+      ratingHtml +
+      distHtml +
+      '<div class="pro-tags">' + tagsHtml + '</div>' +
+      priceHtml +
+      '<button class="btn-book">Agendar →</button>';
+
+    // Eventos via addEventListener (evita injeção inline)
+    card.querySelector('.fav-btn').addEventListener('click', e => {
+      e.stopPropagation();
+      toggleFavorite(pid, name);
+    });
+    card.querySelector('.btn-book').addEventListener('click', () => quickBook(name, spec));
+
+    grid.appendChild(card);
+  });
+}
+
+function renderPros() { searchProsList(); }
+
+function quickBook(nm, spec, proData) {
+  if (!reqLogin()) return;
+  // Guarda o profissional pré-selecionado para pular o passo 2
+  window._preselectedPro = proData || null;
+  window._preselectedProName = nm;
+  window._preselectedProSpec = spec;
+
+  // Atualiza botão do modal para indicar que o pro já está escolhido
+  const bookBtn = document.querySelector('#bkS1 .btn-primary');
+  if (bookBtn) {
+    bookBtn.textContent = nm ? 'Agendar com ' + nm + ' →' : 'Buscar profissionais →';
+  }
+
+  // Pré-seleciona especialidade no select
+  const sel = document.getElementById('bkSvc');
+  if (sel && spec) {
+    for (let i = 0; i < sel.options.length; i++) {
+      if (sel.options[i].value === spec || sel.options[i].text === spec ||
+          sel.options[i].text.toLowerCase().includes((spec || '').toLowerCase().split('/')[0].trim())) {
+        sel.selectedIndex = i; break;
+      }
+    }
+  }
+  toggleCarreto(); bkGo(1); openM('bookM');
 }
 
 // === BOOKING FLOW ===
@@ -158,9 +376,32 @@ function searchPros() {
     if (!dateCheck.ok) { toast(dateCheck.msg, 'err'); return; }
     window.bkDetails = { svc, from: f, to: t, date: d, time: tm };
   }
+
+  // Se tem profissional pré-selecionado, vai direto ao chat
+  if (window._preselectedProName) {
+    const nm = window._preselectedProName;
+    const spec = window._preselectedProSpec || svc;
+    window._preselectedProName = null;
+    window._preselectedPro = null;
+    window._preselectedProSpec = null;
+    // Restaura texto do botão
+    const bookBtn = document.querySelector('#bkS1 .btn-primary');
+    if (bookBtn) bookBtn.textContent = 'Buscar profissionais →';
+    // Monta objeto no formato esperado pelo chat
+    const proObj = { n: nm, e: '👤', p: 100 };
+    // Tenta achar no PDB para pegar ícone/preço
+    for (const [s, list] of Object.entries(PDB)) {
+      const found = list.find(p => p.n === nm);
+      if (found) { proObj.e = found.e; proObj.p = found.p || 100; break; }
+    }
+    closeM('bookM');
+    openChat(proObj, spec);
+    return;
+  }
+
+  // Sem pro pré-selecionado: mostra lista do passo 2
   const pros = PDB[svc] || PDB['Faxina'];
   document.getElementById('prosCount').textContent = pros.length + ' encontrados';
-  // Store pros for safe onclick (avoid inline JSON injection)
   window._searchPros = pros;
   document.getElementById('prosResults').innerHTML = pros.map((p, idx) => {
     const ph = (!isC && p.p) ? `<div style="font-weight:700;color:var(--p)">R$ ${esc(String(p.p))}</div>` : '';

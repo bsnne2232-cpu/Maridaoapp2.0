@@ -32,13 +32,16 @@
 <div class="user-area" id="userArea">
 <div class="avatar" id="userAv" onclick="document.getElementById('userDd').classList.toggle('show')">B</div>
 <div class="dropdown" id="userDd">
-<a href="#" id="proDashLink" style="display:none" onclick="loadProDashboard();openM('proDashM');document.getElementById('userDd').classList.remove('show');return false">📊 Meu Dashboard</a>
-<a href="#" onclick="showMyBookings();return false">📋 Meus serviços</a>
+<a href="#" id="proDashLink" style="display:none" onclick="showProView();document.getElementById('userDd').classList.remove('show');return false">📊 Meu Dashboard</a>
+<a href="#" id="clientBookingsLink" onclick="showMyBookings();return false">📋 Meus serviços</a>
 <button onclick="logoutUser()">🚪 Sair</button>
 </div>
 </div>
 </div>
 </nav>
+
+<!-- ===== CLIENT VIEW ===== -->
+<div id="clientView">
 
 <!-- HERO -->
 <section class="hero">
@@ -70,10 +73,34 @@
 </div>
 </section>
 
-<!-- FEATURED PROS -->
+<!-- PROFESSIONALS SEARCH -->
 <section id="profissionais" class="fade-in">
-<div class="stag">Profissionais em destaque</div>
-<h2 class="stitle">Os melhores da sua cidade</h2>
+<div class="stag">Encontre profissionais</div>
+<h2 class="stitle">Busque, favorite e agende</h2>
+<div class="pros-search-bar">
+  <input type="text" id="prosNameSearch" placeholder="Buscar por nome...">
+  <select id="prosSpecFilter" onchange="searchProsList()">
+    <option value="">Todas especialidades</option>
+    <option value="Faxina / Diarista">Faxina / Diarista</option>
+    <option value="Encanamento">Encanamento</option>
+    <option value="Elétrica">Elétrica</option>
+    <option value="Pintura">Pintura</option>
+    <option value="Montagem de móveis">Montagem de móveis</option>
+    <option value="Ar-condicionado">Ar-condicionado</option>
+    <option value="Jardinagem">Jardinagem</option>
+    <option value="Chaveiro">Chaveiro</option>
+    <option value="Pet Sitter">Pet Sitter</option>
+    <option value="Carreto">Carreto</option>
+    <option value="Mudança">Mudança</option>
+  </select>
+  <button class="btn btn-primary" onclick="searchProsList()">🔍 Buscar</button>
+  <button class="btn btn-ghost fav-filter-btn" id="favFilterBtn" onclick="toggleFavFilter()">🤍 Favoritos</button>
+</div>
+<div id="prosLoading" style="display:none;text-align:center;padding:30px;color:var(--text2)">🔍 Buscando profissionais...</div>
+<div id="prosEmpty" style="display:none;text-align:center;padding:48px;color:var(--text2)">
+  <div style="font-size:3rem;margin-bottom:12px">😔</div>
+  <p id="prosEmptyMsg">Nenhum profissional encontrado.</p>
+</div>
 <div class="pros-grid" id="prosGrid"></div>
 </section>
 
@@ -166,6 +193,191 @@
 </div>
 <div class="ft-bot">© 2025 Maridão App. Todos os direitos reservados. Feito com ❤️ no Brasil</div>
 </footer>
+
+</div><!-- /clientView -->
+
+<!-- ===== PRO VIEW (página completa do profissional) ===== -->
+<div id="proView" style="display:none">
+  <div class="pro-page">
+
+    <!-- HEADER DO PROFISSIONAL -->
+    <div class="pro-dash-header">
+      <div class="pro-dash-user">
+        <div class="pro-av-lg" id="proAvLg">P</div>
+        <div>
+          <h3 id="proNameDash" style="margin:0">Profissional</h3>
+          <p id="proSpecDash" style="margin:0;font-size:.85rem;color:var(--text2)">Carregando...</p>
+        </div>
+      </div>
+      <div class="pro-dash-tabs">
+        <button class="pro-tab-btn active" data-tab="requests" onclick="switchProTab('requests')">📋 Pedidos</button>
+        <button class="pro-tab-btn" data-tab="accepted" onclick="switchProTab('accepted')">✅ Em andamento</button>
+        <button class="pro-tab-btn" data-tab="completed" onclick="switchProTab('completed')">🏆 Concluídos</button>
+        <button class="pro-tab-btn" data-tab="earnings" onclick="switchProTab('earnings')">💰 Ganhos</button>
+        <button class="pro-tab-btn" data-tab="chats" onclick="switchProTab('chats')">💬 Chats</button>
+        <button class="pro-tab-btn" data-tab="profile" onclick="switchProTab('profile')">⚙️ Perfil</button>
+      </div>
+    </div>
+
+    <!-- CONTEÚDO DAS ABAS -->
+    <div class="pro-dash-content">
+
+      <!-- ABA 1: NOVOS PEDIDOS -->
+      <div id="tab-requests" class="pro-tab-content active">
+        <div style="margin-bottom:16px">
+          <h4>Novos pedidos</h4>
+          <p style="color:var(--text2);font-size:.85rem">Pedidos da sua especialidade aguardando profissional.</p>
+        </div>
+        <div id="requestsList" style="display:grid;gap:12px"></div>
+        <div id="noRequests" style="text-align:center;padding:40px;color:var(--text2)">
+          <div style="font-size:3rem;margin-bottom:12px">😴</div>
+          <p>Nenhum pedido no momento. Volte em breve!</p>
+        </div>
+      </div>
+
+      <!-- ABA 2: EM ANDAMENTO -->
+      <div id="tab-accepted" class="pro-tab-content">
+        <div style="margin-bottom:16px">
+          <h4>Serviços em andamento</h4>
+          <p style="color:var(--text2);font-size:.85rem">Pedidos aceitos. Acompanhe pagamentos aqui.</p>
+        </div>
+        <div id="acceptedList" style="display:grid;gap:12px"></div>
+        <div id="noAccepted" style="text-align:center;padding:40px;color:var(--text2)">
+          <div style="font-size:3rem;margin-bottom:12px">🎯</div>
+          <p>Nenhum serviço em andamento</p>
+        </div>
+      </div>
+
+      <!-- ABA 3: HISTÓRICO -->
+      <div id="tab-completed" class="pro-tab-content">
+        <div style="margin-bottom:16px">
+          <h4>Histórico de serviços</h4>
+          <p style="color:var(--text2);font-size:.85rem">Últimos 30 serviços concluídos</p>
+        </div>
+        <div id="completedList" style="display:grid;gap:12px"></div>
+        <div id="noCompleted" style="text-align:center;padding:40px;color:var(--text2)">
+          <div style="font-size:3rem;margin-bottom:12px">📭</div>
+          <p>Nenhum serviço concluído</p>
+        </div>
+      </div>
+
+      <!-- ABA 4: GANHOS -->
+      <div id="tab-earnings" class="pro-tab-content">
+        <div style="margin-bottom:16px">
+          <h4>Seus ganhos</h4>
+          <p style="color:var(--text2);font-size:.85rem">Acompanhe seus ganhos (75% do valor combinado)</p>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:24px">
+          <div class="earnings-card">
+            <div style="color:var(--text2);font-size:.85rem">Este mês</div>
+            <div style="font-size:1.8rem;font-weight:800;color:var(--p);margin:8px 0" id="earningsMonth">R$ —</div>
+            <div style="font-size:.75rem;color:var(--text2)" id="serviceCountMonth">— serviços</div>
+          </div>
+          <div class="earnings-card">
+            <div style="color:var(--text2);font-size:.85rem">Total acumulado</div>
+            <div style="font-size:1.8rem;font-weight:800;color:var(--p);margin:8px 0" id="earningsTotal">R$ —</div>
+            <div style="font-size:.75rem;color:var(--text2)" id="serviceCountTotal">— serviços</div>
+          </div>
+          <div class="earnings-card">
+            <div style="color:var(--text2);font-size:.85rem">Avaliação média</div>
+            <div style="font-size:1.8rem;font-weight:800;color:#059669;margin:8px 0" id="avgRating">—</div>
+            <div style="font-size:.75rem;color:var(--text2)">Estrelas</div>
+          </div>
+        </div>
+        <h5 style="margin-bottom:12px">Últimos 10 pagamentos</h5>
+        <div id="paymentsList" style="display:grid;gap:8px"></div>
+      </div>
+
+      <!-- ABA 5: PERFIL -->
+      <div id="tab-profile" class="pro-tab-content">
+        <div style="margin-bottom:16px"><h4>Seu perfil</h4></div>
+
+        <div class="profile-section">
+          <h5>📄 Status de documentos</h5>
+          <div style="padding:12px;background:var(--bg2);border-radius:var(--rs);margin:8px 0">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+              <div id="docBadge" style="display:inline-block;padding:4px 8px;border-radius:4px;font-size:.75rem;font-weight:700">—</div>
+              <span id="docText" style="font-size:.85rem;color:var(--text2)">—</span>
+            </div>
+            <button class="btn btn-primary btn-small" onclick="openM('docsM')">📤 Atualizar documentos</button>
+          </div>
+        </div>
+
+        <div class="profile-section">
+          <h5>📝 Sobre você</h5>
+          <textarea id="bioPro" placeholder="Descreva sua experiência..." style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:var(--rs);font-family:inherit;font-size:.9rem;resize:vertical;margin:8px 0;background:var(--input);color:var(--text)" rows="3" maxlength="500"></textarea>
+          <button class="btn btn-primary btn-small" onclick="saveBio()">💾 Salvar bio</button>
+        </div>
+
+        <div class="profile-section">
+          <h5>🏧 Chave PIX para saques</h5>
+          <input type="text" id="pixPro" placeholder="CPF, e-mail ou chave aleatória" style="margin:8px 0">
+          <button class="btn btn-primary btn-small" onclick="savePix()">💾 Salvar chave PIX</button>
+        </div>
+
+        <div class="profile-section">
+          <h5>📍 Raio de atendimento</h5>
+          <div style="display:flex;gap:12px;align-items:center;margin:8px 0">
+            <input type="range" id="radiusPro" min="1" max="50" value="15" style="flex:1;padding:0;border:none;background:transparent" oninput="document.getElementById('radiusDisplay').textContent=this.value+' km'">
+            <span id="radiusDisplay" style="font-weight:700;min-width:50px">15 km</span>
+          </div>
+          <button class="btn btn-primary btn-small" onclick="saveRadius()">💾 Salvar raio</button>
+        </div>
+
+        <div class="profile-section">
+          <h5>⭐ Especialidade e valor</h5>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:8px 0">
+            <div>
+              <label style="display:block;font-size:.85rem;color:var(--text2);margin-bottom:4px">Especialidade</label>
+              <select id="specPro">
+                <option value="Faxina / Diarista">Faxina / Diarista</option>
+                <option value="Encanamento">Encanamento</option>
+                <option value="Elétrica">Elétrica</option>
+                <option value="Pintura">Pintura</option>
+                <option value="Montagem de móveis">Montagem de móveis</option>
+                <option value="Ar-condicionado">Ar-condicionado</option>
+                <option value="Jardinagem">Jardinagem</option>
+                <option value="Chaveiro">Chaveiro</option>
+                <option value="Pet Sitter">Pet Sitter</option>
+                <option value="Carreto">Carreto</option>
+                <option value="Mudança">Mudança</option>
+              </select>
+            </div>
+            <div>
+              <label style="display:block;font-size:.85rem;color:var(--text2);margin-bottom:4px">Valor por serviço (R$)</label>
+              <input type="number" id="ratePro" placeholder="Ex: 150" min="1" max="10000">
+            </div>
+          </div>
+          <button class="btn btn-primary btn-small" onclick="saveTax()">💾 Salvar</button>
+        </div>
+
+      </div><!-- /tab-profile -->
+
+      <!-- ABA 6: CHATS ANTIGOS -->
+      <div id="tab-chats" class="pro-tab-content">
+        <div style="margin-bottom:16px">
+          <h4>Chats antigos</h4>
+          <p style="color:var(--text2);font-size:.85rem">Histórico de conversas com clientes.</p>
+        </div>
+        <div id="chatHistoryList" style="display:grid;gap:12px"></div>
+        <div id="noChats" style="text-align:center;padding:40px;color:var(--text2)">
+          <div style="font-size:3rem;margin-bottom:12px">💬</div>
+          <p>Nenhuma conversa encontrada</p>
+        </div>
+      </div>
+
+    </div><!-- /pro-dash-content -->
+  </div><!-- /pro-page -->
+
+  <!-- AVISO FIXO: MERCADO PAGO + TAXA -->
+  <div class="pro-payment-notice">
+    <span>💳 <strong>Pagamentos exclusivamente via Mercado Pago</strong></span>
+    <span class="pro-notice-sep">|</span>
+    <span>Taxa de plataforma: <strong>25%</strong> — você recebe <strong>75%</strong> do valor combinado</span>
+  </div>
+
+</div><!-- /proView -->
+
 <!-- === MODALS === -->
 
 <!-- LOGIN -->
@@ -267,7 +479,7 @@ Cancelamentos em cima da hora podem resultar em avaliação negativa e suspensã
 
 <!-- BOOK MODAL -->
 <div class="mo" id="bookM"><div class="md" style="max-width:520px">
-<button class="md-close" onclick="closeM('bookM')">✕</button>
+<button class="md-close" onclick="closeM('bookM');window._preselectedProName=null;window._preselectedPro=null;const bb=document.querySelector('#bkS1 .btn-primary');if(bb)bb.textContent='Buscar profissionais →'">✕</button>
 <div class="panel active" id="bkS1">
 <h3>Agendar serviço 📅</h3><p class="msub">Preencha os detalhes obrigatórios.</p>
 <div class="fg"><label>Tipo de serviço *</label><select id="bkSvc" onchange="toggleCarreto()"><option>Encanamento</option><option>Elétrica</option><option>Faxina</option><option>Pintura</option><option>Montagem de móveis</option><option>Ar-condicionado</option><option>Jardinagem</option><option>Chaveiro</option><option>Carreto</option><option>Mudança</option><option>Pet Sitter</option></select></div>
@@ -366,169 +578,6 @@ Cancelamentos em cima da hora podem resultar em avaliação negativa e suspensã
 </div>
 </div></div>
 <!-- PROFESSIONAL DASHBOARD MODAL -->
-<div class="mo" id="proDashM">
-  <div class="md pro-dash" style="max-width:1000px;height:95vh;display:flex;flex-direction:column;padding:0;overflow:hidden">
-    <button class="md-close" onclick="closeM('proDashM');cleanupProDashboard()">✕</button>
-
-    <!-- HEADER -->
-    <div class="pro-dash-header">
-      <div class="pro-dash-user">
-        <div class="pro-av-lg" id="proAvLg">P</div>
-        <div>
-          <h3 id="proNameDash" style="margin:0">Profissional</h3>
-          <p id="proSpecDash" style="margin:0;font-size:.85rem;color:var(--text2)">Carregando...</p>
-        </div>
-      </div>
-      <div class="pro-dash-tabs">
-        <button class="pro-tab-btn active" data-tab="requests" onclick="switchProTab('requests')">📋 Pedidos</button>
-        <button class="pro-tab-btn" data-tab="accepted" onclick="switchProTab('accepted')">✅ Em andamento</button>
-        <button class="pro-tab-btn" data-tab="completed" onclick="switchProTab('completed')">🏆 Concluídos</button>
-        <button class="pro-tab-btn" data-tab="earnings" onclick="switchProTab('earnings')">💰 Ganhos</button>
-        <button class="pro-tab-btn" data-tab="profile" onclick="switchProTab('profile')">⚙️ Perfil</button>
-      </div>
-    </div>
-
-    <!-- CONTENT -->
-    <div class="pro-dash-content">
-
-      <!-- TAB 1: NEW REQUESTS -->
-      <div id="tab-requests" class="pro-tab-content active">
-        <div style="margin-bottom:16px">
-          <h4>Novos pedidos</h4>
-          <p style="color:var(--text2);font-size:.85rem">Pedidos da sua especialidade aguardando profissional.</p>
-        </div>
-        <div id="requestsList" style="display:grid;gap:12px"></div>
-        <div id="noRequests" style="text-align:center;padding:40px;color:var(--text2)">
-          <div style="font-size:3rem;margin-bottom:12px">😴</div>
-          <p>Nenhum pedido no momento. Volte em breve!</p>
-        </div>
-      </div>
-
-      <!-- TAB 2: ACCEPTED / IN PROGRESS -->
-      <div id="tab-accepted" class="pro-tab-content">
-        <div style="margin-bottom:16px">
-          <h4>Serviços em andamento</h4>
-          <p style="color:var(--text2);font-size:.85rem">Pedidos aceitos. Acompanhe pagamentos aqui.</p>
-        </div>
-        <div id="acceptedList" style="display:grid;gap:12px"></div>
-        <div id="noAccepted" style="text-align:center;padding:40px;color:var(--text2)">
-          <div style="font-size:3rem;margin-bottom:12px">🎯</div>
-          <p>Nenhum serviço em andamento</p>
-        </div>
-      </div>
-
-      <!-- TAB 3: COMPLETED / HISTORY -->
-      <div id="tab-completed" class="pro-tab-content">
-        <div style="margin-bottom:16px">
-          <h4>Histórico de serviços</h4>
-          <p style="color:var(--text2);font-size:.85rem">Últimos 30 serviços concluídos</p>
-        </div>
-        <div id="completedList" style="display:grid;gap:12px"></div>
-        <div id="noCompleted" style="text-align:center;padding:40px;color:var(--text2)">
-          <div style="font-size:3rem;margin-bottom:12px">📭</div>
-          <p>Nenhum serviço concluído</p>
-        </div>
-      </div>
-
-      <!-- TAB 4: EARNINGS -->
-      <div id="tab-earnings" class="pro-tab-content">
-        <div style="margin-bottom:16px">
-          <h4>Seus ganhos</h4>
-          <p style="color:var(--text2);font-size:.85rem">Acompanhe seus ganhos (75% do valor combinado)</p>
-        </div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:24px">
-          <div class="earnings-card">
-            <div style="color:var(--text2);font-size:.85rem">Este mês</div>
-            <div style="font-size:1.8rem;font-weight:800;color:var(--p);margin:8px 0" id="earningsMonth">R$ —</div>
-            <div style="font-size:.75rem;color:var(--text2)" id="serviceCountMonth">— serviços</div>
-          </div>
-          <div class="earnings-card">
-            <div style="color:var(--text2);font-size:.85rem">Total acumulado</div>
-            <div style="font-size:1.8rem;font-weight:800;color:var(--p);margin:8px 0" id="earningsTotal">R$ —</div>
-            <div style="font-size:.75rem;color:var(--text2)" id="serviceCountTotal">— serviços</div>
-          </div>
-          <div class="earnings-card">
-            <div style="color:var(--text2);font-size:.85rem">Avaliação média</div>
-            <div style="font-size:1.8rem;font-weight:800;color:#059669;margin:8px 0" id="avgRating">—</div>
-            <div style="font-size:.75rem;color:var(--text2)">Estrelas</div>
-          </div>
-        </div>
-        <h5 style="margin-bottom:12px">Últimos 10 pagamentos</h5>
-        <div id="paymentsList" style="display:grid;gap:8px"></div>
-      </div>
-
-      <!-- TAB 5: PROFILE -->
-      <div id="tab-profile" class="pro-tab-content">
-        <div style="margin-bottom:16px"><h4>Seu perfil</h4></div>
-
-        <!-- Document status -->
-        <div class="profile-section">
-          <h5>📄 Status de documentos</h5>
-          <div style="padding:12px;background:var(--bg2);border-radius:var(--rs);margin:8px 0">
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-              <div id="docBadge" style="display:inline-block;padding:4px 8px;border-radius:4px;font-size:.75rem;font-weight:700">—</div>
-              <span id="docText" style="font-size:.85rem;color:var(--text2)">—</span>
-            </div>
-            <button class="btn btn-primary btn-small" onclick="openM('docsM')">📤 Atualizar documentos</button>
-          </div>
-        </div>
-
-        <!-- Bio -->
-        <div class="profile-section">
-          <h5>📝 Sobre você</h5>
-          <textarea id="bioPro" placeholder="Descreva sua experiência..." style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:var(--rs);font-family:inherit;font-size:.9rem;resize:vertical;margin:8px 0;background:var(--input);color:var(--text)" rows="3" maxlength="500"></textarea>
-          <button class="btn btn-primary btn-small" onclick="saveBio()">💾 Salvar bio</button>
-        </div>
-
-        <!-- PIX -->
-        <div class="profile-section">
-          <h5>🏧 Chave PIX para saques</h5>
-          <input type="text" id="pixPro" placeholder="CPF, e-mail ou chave aleatória" style="margin:8px 0">
-          <button class="btn btn-primary btn-small" onclick="savePix()">💾 Salvar chave PIX</button>
-        </div>
-
-        <!-- Radius -->
-        <div class="profile-section">
-          <h5>📍 Raio de atendimento</h5>
-          <div style="display:flex;gap:12px;align-items:center;margin:8px 0">
-            <input type="range" id="radiusPro" min="1" max="50" value="15" style="flex:1;padding:0;border:none;background:transparent" oninput="document.getElementById('radiusDisplay').textContent=this.value+' km'">
-            <span id="radiusDisplay" style="font-weight:700;min-width:50px">15 km</span>
-          </div>
-          <button class="btn btn-primary btn-small" onclick="saveRadius()">💾 Salvar raio</button>
-        </div>
-
-        <!-- Specialty + rate -->
-        <div class="profile-section">
-          <h5>⭐ Especialidade e valor/hora</h5>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:8px 0">
-            <div>
-              <label style="display:block;font-size:.85rem;color:var(--text2);margin-bottom:4px">Especialidade</label>
-              <select id="specPro">
-                <option value="Faxina">Faxina / Diarista</option>
-                <option value="Encanamento">Encanamento</option>
-                <option value="Elétrica">Elétrica</option>
-                <option value="Pintura">Pintura</option>
-                <option value="Montagem de móveis">Montagem de móveis</option>
-                <option value="Ar-condicionado">Ar-condicionado</option>
-                <option value="Jardinagem">Jardinagem</option>
-                <option value="Chaveiro">Chaveiro</option>
-                <option value="Pet Sitter">Pet Sitter</option>
-                <option value="Carreto">Carreto</option>
-                <option value="Mudança">Mudança</option>
-              </select>
-            </div>
-            <div>
-              <label style="display:block;font-size:.85rem;color:var(--text2);margin-bottom:4px">Taxa/hora (R$)</label>
-              <input type="number" id="ratePro" placeholder="Ex: 150" min="1" max="10000">
-            </div>
-          </div>
-          <button class="btn btn-primary btn-small" onclick="saveTax()">💾 Salvar</button>
-        </div>
-
-      </div>
-    </div>
-  </div>
-</div>
 
 <script src="js/firebase.js"></script>
 <script src="js/utils.js"></script>
