@@ -127,4 +127,4 @@ function heroSearchAction() {
   const sec = document.getElementById('profissionais');
   if (sec) sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
-function showMyBookings() { toast('Em breve: histórico!', 'inf'); }
+// showMyBookings() defined in chat.js

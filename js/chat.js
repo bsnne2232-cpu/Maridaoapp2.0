@@ -213,3 +213,110 @@ function chatPayNow() {
   closeM('chatM');
   openPayM(selPro.n, selSvc, agreedPrice);
 }
+
+// === REABRIR CHAT EXISTENTE (sem criar novo booking) ===
+async function reopenClientChat(bookingId, proName, proIcon) {
+  if (!CU) return;
+  _seenMsgIds = new Set();
+  _lastProPrice = 0;
+  chatSt = { msgs: 0, details: { what: false, where: false, when: false }, agreed: false, price: 0 };
+  if (_chatListener) { _chatListener(); _chatListener = null; }
+  window.currentBookingId = bookingId;
+
+  document.getElementById('chatAv').textContent = proIcon || '🔧';
+  document.getElementById('chatNm').textContent = proName || 'Profissional';
+  document.getElementById('chatMsgs').innerHTML = '';
+  document.getElementById('chatPay').classList.remove('show');
+  const qa = document.getElementById('chatQuickAccept');
+  if (qa) qa.style.display = 'none';
+  closeM('clientChatsM');
+  openM('chatM');
+
+  // Verifica se já tinha preço acordado
+  try {
+    const bkSnap = await db.collection('bookings').doc(bookingId).get();
+    if (bkSnap.exists) {
+      const bk = bkSnap.data();
+      if (bk.agreedPrice && bk.status !== 'completed') {
+        chatSt.agreed = true; chatSt.price = bk.agreedPrice; agreedPrice = bk.agreedPrice;
+        document.getElementById('chatPay').classList.add('show');
+        document.getElementById('cpPrice').textContent = 'R$ ' + bk.agreedPrice + ',00';
+      }
+      selSvc = bk.service || '';
+      if (!selPro) selPro = { n: proName || '', e: proIcon || '🔧', p: 100 };
+    }
+  } catch (e) {}
+
+  // Listener real-time no booking existente
+  _chatListener = db.collection('messages')
+    .where('bookingId', '==', bookingId)
+    .onSnapshot(snap => renderChatSnapshot(snap), err => console.error('reopen listener:', err));
+}
+
+// === CARREGAR CHATS DO CLIENTE ===
+async function showMyBookings() {
+  if (!CU) { openM('loginM'); toast('Faça login para ver seus chats', 'err'); return; }
+  openM('clientChatsM');
+  const list = document.getElementById('clientChatsList');
+  list.innerHTML = '<div style="text-align:center;padding:32px;color:var(--text2)">⏳ Carregando...</div>';
+
+  try {
+    const snap = await db.collection('bookings')
+      .where('userId', '==', CU.uid)
+      .limit(20)
+      .get();
+
+    if (snap.empty) {
+      list.innerHTML = '<div style="text-align:center;padding:32px;color:var(--text2)">😴 Nenhum chat ainda.<br>Agende um serviço para começar!</div>';
+      return;
+    }
+
+    // Ordena por data decrescente client-side
+    const docs = [];
+    snap.forEach(doc => docs.push({ id: doc.id, ...doc.data() }));
+    docs.sort((a, b) => {
+      const ta = a.createdAt ? a.createdAt.toMillis() : 0;
+      const tb = b.createdAt ? b.createdAt.toMillis() : 0;
+      return tb - ta;
+    });
+
+    list.innerHTML = '';
+    for (const bk of docs) {
+      const card = document.createElement('div');
+      card.style.cssText = 'border:1px solid var(--border);border-radius:var(--rs);padding:14px;cursor:pointer;transition:all .2s;background:var(--bg2)';
+      card.onmouseover = () => card.style.borderColor = 'var(--p)';
+      card.onmouseout = () => card.style.borderColor = '';
+
+      const date = bk.createdAt ? bk.createdAt.toDate() : new Date();
+      const dateStr = date.toLocaleDateString('pt-BR') + ' ' + date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+      let statusLabel = '💬 Em aberto';
+      let statusColor = '#3B82F6';
+      if (bk.status === 'accepted' || bk.status === 'payment_pending') { statusLabel = '✅ Aceito'; statusColor = '#10B981'; }
+      else if (bk.status === 'payment_confirmed') { statusLabel = '💳 Pago'; statusColor = '#059669'; }
+      else if (bk.status === 'completed') { statusLabel = '🏆 Concluído'; statusColor = '#6B7280'; }
+
+      const addr = (bk.details && bk.details.addr) || bk.addr || '';
+      const svc = (bk.details && bk.details.svc) || bk.service || 'Serviço';
+
+      card.innerHTML =
+        '<div style="display:flex;justify-content:space-between;align-items:start;gap:8px">' +
+          '<div style="flex:1;min-width:0">' +
+            '<div style="font-weight:700;margin-bottom:4px">' + esc(svc) + '</div>' +
+            '<div style="font-size:.82rem;color:var(--text2);margin-bottom:4px">🔧 ' + esc(bk.proName || 'Aguardando profissional') + '</div>' +
+            (addr ? '<div style="font-size:.78rem;color:var(--text2)">📍 ' + esc(addr) + '</div>' : '') +
+          '</div>' +
+          '<div style="text-align:right;flex-shrink:0">' +
+            '<div style="font-size:.72rem;padding:3px 8px;border-radius:20px;font-weight:700;background:' + statusColor + '22;color:' + statusColor + ';margin-bottom:6px">' + statusLabel + '</div>' +
+            '<div style="font-size:.72rem;color:var(--text2)">' + esc(dateStr) + '</div>' +
+          '</div>' +
+        '</div>';
+
+      card.onclick = () => reopenClientChat(bk.id, bk.proName || 'Profissional', '🔧');
+      list.appendChild(card);
+    }
+  } catch (e) {
+    list.innerHTML = '<div style="text-align:center;padding:32px;color:var(--red)">❌ Erro ao carregar chats. Tente novamente.</div>';
+    console.error('showMyBookings:', e);
+  }
+}
