@@ -116,12 +116,32 @@ function renderChatSnapshot(snap) {
     else if (d.sender === 'user') cls = 'sent';
     else cls = 'recv'; // pro
     // Rastreia último preço mencionado pelo profissional
-    if (d.sender === 'pro') {
+    if (d.sender === 'pro' && !chatSt.agreed) {
       const pm = d.text.match(/(\d{2,})/);
-      if (pm) _lastProPrice = parseInt(pm[1]);
+      if (pm) {
+        _lastProPrice = parseInt(pm[1]);
+        showQuickAccept(_lastProPrice);
+      }
     }
     addMsg(d.text, cls);
   });
+}
+
+// === BOTÃO RÁPIDO DE ACEITAR PROPOSTA DO PRO ===
+function showQuickAccept(price) {
+  if (chatSt.agreed) return;
+  const qa = document.getElementById('chatQuickAccept');
+  if (!qa) return;
+  qa.style.display = 'block';
+  qa.innerHTML = '<button onclick="quickAcceptPrice(' + price + ')" style="width:100%;padding:10px;background:linear-gradient(135deg,#10B981,#059669);color:#fff;border:none;border-radius:var(--rs);font-weight:700;cursor:pointer;font-size:.9rem">✅ Aceitar R$ ' + price + ',00 e pagar</button>';
+}
+
+function quickAcceptPrice(price) {
+  if (chatSt.agreed) return;
+  // Simula envio da mensagem de aceite pelo cliente
+  const inp = document.getElementById('chatIn');
+  if (inp) inp.value = 'aceito R$ ' + price;
+  sendMsg();
 }
 
 // === ADD MESSAGE TO DOM ===
@@ -180,7 +200,9 @@ function sendMsg() {
       agreedPrice: pr,
       priceAgreedAt: firebase.firestore.FieldValue.serverTimestamp()
     }).catch(() => {});
-    // Show pay button
+    // Esconde botão rápido e mostra pagamento
+    const qa = document.getElementById('chatQuickAccept');
+    if (qa) qa.style.display = 'none';
     document.getElementById('chatPay').classList.add('show');
     document.getElementById('cpPrice').textContent = 'R$ ' + pr + ',00';
   }

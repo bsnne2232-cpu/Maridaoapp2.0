@@ -800,3 +800,25 @@ function sendProMsg() {
     at: firebase.firestore.FieldValue.serverTimestamp()
   }).catch(e => console.error('sendProMsg error:', e));
 }
+
+// === PROPOSTA DE VALOR (pro → cliente) ===
+function sendProProposal() {
+  if (!_proChatBookingId || !CU || !currentProfessional) return;
+  const valEl = document.getElementById('proProposeVal');
+  const val = parseFloat(valEl.value);
+  if (!val || val < 10 || val > 10000) { toast('Valor inválido (entre R$ 10 e R$ 10.000)', 'err'); return; }
+  const proReceives = (val * 0.75).toFixed(0);
+  const msg = '💰 Proposta: R$ ' + val.toFixed(0) + ',00\n• Você paga: R$ ' + val.toFixed(0) + '\n• Eu recebo: R$ ' + proReceives + ' (após taxa 25%)\n\nResponda "aceito" para confirmar!';
+  db.collection('messages').add({
+    bookingId: _proChatBookingId,
+    text: msg,
+    sender: 'pro',
+    proName: currentProfessional.name,
+    proId: CU.uid,
+    seq: Date.now(),
+    at: firebase.firestore.FieldValue.serverTimestamp()
+  }).catch(e => console.error('sendProProposal error:', e));
+  valEl.value = '';
+  document.getElementById('proProposeArea').style.display = 'none';
+  toast('Proposta enviada! 💰', 'ok');
+}

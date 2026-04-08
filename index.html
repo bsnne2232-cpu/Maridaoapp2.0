@@ -531,6 +531,7 @@ Cancelamentos em cima da hora podem resultar em avaliação negativa e suspensã
 </div>
 <div class="chat-sec">🔒 Contatos externos bloqueados. Combine tudo aqui e pague pelo app!</div>
 <div class="chat-msgs" id="chatMsgs"></div>
+<div id="chatQuickAccept" style="display:none;padding:8px 16px;border-top:1px solid var(--border)"></div>
 <div class="chat-pay" id="chatPay"><div class="cp-label">VALOR COMBINADO</div><div class="cp-price" id="cpPrice">R$ —</div><button onclick="chatPayNow()">💳 Pagar agora</button></div>
 <div class="chat-in"><input type="text" id="chatIn" placeholder="Digite sua mensagem..." onkeydown="if(event.key==='Enter')sendMsg()"><button onclick="sendMsg()">➤</button></div>
 </div></div>
@@ -548,7 +549,19 @@ Cancelamentos em cima da hora podem resultar em avaliação negativa e suspensã
 </div>
 <div class="chat-sec">🔒 Combine tudo aqui. Após acordo, o cliente paga pelo app (Mercado Pago, taxa 25%).</div>
 <div class="chat-msgs" id="proChatMsgs"></div>
-<div class="chat-in"><input type="text" id="proChatIn" placeholder="Responda ao cliente..." onkeydown="if(event.key==='Enter')sendProMsg()"><button onclick="sendProMsg()">➤</button></div>
+<div id="proProposeArea" style="display:none;padding:6px 12px;border-top:1px solid var(--border);background:var(--bg2)">
+  <div style="font-size:.75rem;color:var(--text2);margin-bottom:6px">💰 Propor valor ao cliente:</div>
+  <div style="display:flex;gap:6px">
+    <input type="number" id="proProposeVal" placeholder="Ex: 270" min="10" max="10000" style="flex:1;padding:8px 12px;font-size:.9rem" onkeydown="if(event.key==='Enter')sendProProposal()">
+    <button onclick="sendProProposal()" style="padding:8px 14px;background:var(--p);color:#fff;border:none;border-radius:var(--rs);font-weight:700;cursor:pointer">Enviar 💰</button>
+    <button onclick="document.getElementById('proProposeArea').style.display='none'" style="padding:8px 10px;background:var(--bg);border:1px solid var(--border);border-radius:var(--rs);cursor:pointer">✕</button>
+  </div>
+</div>
+<div class="chat-in">
+  <button onclick="document.getElementById('proProposeArea').style.display=document.getElementById('proProposeArea').style.display==='none'?'block':'none'" title="Propor valor" style="width:36px;height:36px;border-radius:50%;background:var(--pl);border:none;cursor:pointer;font-size:1rem;flex-shrink:0">💰</button>
+  <input type="text" id="proChatIn" placeholder="Responda ao cliente..." onkeydown="if(event.key==='Enter')sendProMsg()">
+  <button onclick="sendProMsg()">➤</button>
+</div>
 </div></div>
 
 <!-- PAYMENT MODAL -->
