@@ -26,6 +26,7 @@ let _chatListener = null;
 let _seenMsgIds = new Set();
 let _pendingSeqs = new Set(); // seqs de mensagens enviadas localmente (renderização otimista)
 let _lastProPrice = 0; // último preço mencionado pelo profissional
+let _bookingListener = null; // ouve mudanças no documento de booking (proposta do pro)
 
 // === OPEN CHAT (CLIENT SIDE) ===
 async function openChat(p, s) {
@@ -36,6 +37,7 @@ async function openChat(p, s) {
   _pendingSeqs = new Set();
   _lastProPrice = 0;
   if (_chatListener) { _chatListener(); _chatListener = null; }
+  if (_bookingListener) { _bookingListener(); _bookingListener = null; }
 
   document.getElementById('chatAv').textContent = p.e;
   document.getElementById('chatNm').textContent = p.n;
@@ -68,6 +70,23 @@ async function openChat(p, s) {
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
     window.currentBookingId = ref.id;
+
+    // Escuta documento de booking para capturar proposta do profissional em tempo real
+    _bookingListener = db.collection('bookings').doc(ref.id).onSnapshot(snap => {
+      if (!snap.exists || chatSt.agreed) return;
+      const bk = snap.data();
+      if (bk.lastProPosal && bk.lastProPosal !== _lastProPrice) {
+        _lastProPrice = bk.lastProPosal;
+        showQuickAccept(_lastProPrice);
+      }
+      if (bk.agreedPrice) {
+        chatSt.agreed = true; chatSt.price = bk.agreedPrice; agreedPrice = bk.agreedPrice;
+        const qa = document.getElementById('chatQuickAccept');
+        if (qa) qa.style.display = 'none';
+        document.getElementById('chatPay').classList.add('show');
+        document.getElementById('cpPrice').textContent = 'R$ ' + bk.agreedPrice + ',00';
+      }
+    }, err => console.error('booking listener:', err));
 
     // Save initial system messages so professional can see context
     const t0 = Date.now();
@@ -222,6 +241,7 @@ function sendMsg() {
 
 function chatPayNow() {
   if (_chatListener) { _chatListener(); _chatListener = null; }
+  if (_bookingListener) { _bookingListener(); _bookingListener = null; }
   closeM('chatM');
   openPayM(selPro.n, selSvc, agreedPrice);
 }
@@ -234,6 +254,7 @@ async function reopenClientChat(bookingId, proName, proIcon) {
   _lastProPrice = 0;
   chatSt = { msgs: 0, details: { what: false, where: false, when: false }, agreed: false, price: 0 };
   if (_chatListener) { _chatListener(); _chatListener = null; }
+  if (_bookingListener) { _bookingListener(); _bookingListener = null; }
   window.currentBookingId = bookingId;
 
   document.getElementById('chatAv').textContent = proIcon || '🔧';
@@ -267,6 +288,23 @@ async function reopenClientChat(bookingId, proName, proIcon) {
       console.error('reopen listener:', err);
       if (err.code === 'permission-denied') addMsg('⚠️ Sem permissão para acessar mensagens.', 'blk');
     });
+
+  // Escuta documento de booking para capturar proposta do profissional em tempo real
+  _bookingListener = db.collection('bookings').doc(bookingId).onSnapshot(snap => {
+    if (!snap.exists || chatSt.agreed) return;
+    const bk = snap.data();
+    if (bk.lastProPosal && bk.lastProPosal !== _lastProPrice) {
+      _lastProPrice = bk.lastProPosal;
+      showQuickAccept(_lastProPrice);
+    }
+    if (bk.agreedPrice) {
+      chatSt.agreed = true; chatSt.price = bk.agreedPrice; agreedPrice = bk.agreedPrice;
+      const qa = document.getElementById('chatQuickAccept');
+      if (qa) qa.style.display = 'none';
+      document.getElementById('chatPay').classList.add('show');
+      document.getElementById('cpPrice').textContent = 'R$ ' + bk.agreedPrice + ',00';
+    }
+  }, err => console.error('reopen booking listener:', err));
 }
 
 // === CARREGAR CHATS DO CLIENTE ===
@@ -296,8 +334,22 @@ async function showMyBookings() {
       return tb - ta;
     });
 
+    // Filtra: remove recusados e chats sem acordo > 7 dias
+    const filtered = docs.filter(bk => {
+      if (bk.declinedBy && bk.declinedBy.length > 0) return false;
+      if (bk.agreedPrice) return true;
+      if (['accepted', 'payment_pending', 'payment_confirmed', 'completed'].includes(bk.status)) return true;
+      const ts = bk.createdAt ? bk.createdAt.toMillis() : 0;
+      return Date.now() - ts < 7 * 24 * 60 * 60 * 1000;
+    });
+
+    if (filtered.length === 0) {
+      list.innerHTML = '<div style="text-align:center;padding:32px;color:var(--text2)">😴 Nenhum serviço ativo ainda.<br>Agende um serviço para começar!</div>';
+      return;
+    }
+
     list.innerHTML = '';
-    for (const bk of docs) {
+    for (const bk of filtered) {
       const card = document.createElement('div');
       card.style.cssText = 'border:1px solid var(--border);border-radius:var(--rs);padding:14px;cursor:pointer;transition:all .2s;background:var(--bg2)';
       card.onmouseover = () => card.style.borderColor = 'var(--p)';

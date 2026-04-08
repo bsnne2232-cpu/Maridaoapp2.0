@@ -843,6 +843,10 @@ function sendProProposal() {
     seq: seq,
     at: firebase.firestore.FieldValue.serverTimestamp()
   }).catch(e => { console.error('sendProProposal error:', e); _proPendingSeqs.delete(seq); });
+  // Atualiza booking com lastProPosal para sincronizar com cliente em tempo real
+  db.collection('bookings').doc(_proChatBookingId).update({
+    lastProPosal: Math.round(val)
+  }).catch(e => console.error('update lastProPosal:', e));
   valEl.value = '';
   document.getElementById('proProposeArea').style.display = 'none';
   toast('Proposta de R$ ' + val.toFixed(0) + ' enviada! Você recebe R$ ' + proReceives + ' (75%) 💰', 'ok');
