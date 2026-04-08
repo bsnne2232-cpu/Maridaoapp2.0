@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="X-Content-Type-Options" content="nosniff">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>Trabalhe Conosco — Maridão App</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+<link rel="stylesheet" href="style.css">
+<style>
+.page-hero{padding:120px 24px 60px;text-align:center;background:linear-gradient(135deg,var(--p) 0%,#3B82F6 100%);color:#fff}
+.page-hero h1{font-size:clamp(1.8rem,4vw,2.8rem);font-weight:800;margin-bottom:12px;letter-spacing:-.5px}
+.page-hero p{font-size:1rem;opacity:.9;max-width:480px;margin:0 auto;font-family:var(--font2);line-height:1.65}
+.back-link{display:inline-flex;align-items:center;gap:6px;color:rgba(255,255,255,.85);font-size:.85rem;font-weight:600;margin-bottom:20px;transition:color .2s}
+.back-link:hover{color:#fff}
+</style>
+</head>
+<body>
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<!-- NAV -->
+<nav id="navbar">
+<a href="index.html" class="logo">Maridão <span>App</span></a>
+<div class="nav-links">
+<a href="index.html">← Voltar ao app</a>
+<a href="index.html#profissionais">Ver profissionais</a>
+</div>
+<div class="nav-right">
+<button class="theme-btn" id="themeBtn" onclick="toggleTheme()">🌙</button>
+<div id="authBtns">
+<button class="btn btn-ghost" onclick="openM('loginM')">Entrar</button>
+<button class="btn btn-primary" onclick="openM('signupM')">Começar grátis</button>
+</div>
+<div class="user-area" id="userArea">
+<div class="avatar" id="userAv" onclick="document.getElementById('userDd').classList.toggle('show')">B</div>
+<div class="dropdown" id="userDd">
+<a href="index.html" onclick="document.getElementById('userDd').classList.remove('show')">🏠 Ir para o app</a>
+<button onclick="logoutUser()">🚪 Sair</button>
+</div>
+</div>
+</div>
+</nav>
+
+<!-- HERO -->
+<div class="page-hero">
+<a href="index.html" class="back-link">← Voltar ao app</a>
+<h1>Trabalhe com a gente e aumente sua renda</h1>
+<p>Cadastre-se grátis, receba pedidos perto de você e pague só quando trabalhar.</p>
+</div>
+
+<!-- CONTEÚDO PRINCIPAL -->
+<section id="trabalhe-conosco" class="fade-in" style="padding-top:60px">
+<div class="work">
+<div class="work-grid">
+<div>
+<div class="ben-item"><div class="ben-ic">💰</div><div><h4>Sem mensalidade</h4><p>Pague apenas 25% por serviço realizado. Zero custo pra se cadastrar.</p></div></div>
+<div class="ben-item"><div class="ben-ic">📱</div><div><h4>Clientes na sua região</h4><p>Receba pedidos perto de você, na sua cidade ou bairro.</p></div></div>
+<div class="ben-item"><div class="ben-ic">⚡</div><div><h4>Pagamento rápido</h4><p>Receba em até 1 hora após a confirmação do serviço.</p></div></div>
+<div class="ben-item"><div class="ben-ic">🛡️</div><div><h4>Você no controle</h4><p>Escolha seus horários e aceite só o que quiser.</p></div></div>
+<div class="ben-item"><div class="ben-ic">💬</div><div><h4>Chat com o cliente</h4><p>Combine preço e detalhes diretamente pelo app, com segurança.</p></div></div>
+<div class="ben-item"><div class="ben-ic">🏆</div><div><h4>Construa sua reputação</h4><p>Avaliações dos clientes aumentam sua visibilidade na plataforma.</p></div></div>
+<div class="wk-stats">
+<div class="wk-stat"><div class="v">R$ 3.800</div><div class="l">Média/mês dos tops</div></div>
+<div class="wk-stat"><div class="v">24h</div><div class="l">Aprovação</div></div>
+<div class="wk-stat"><div class="v">12k+</div><div class="l">Profissionais</div></div>
+</div>
+</div>
+<div class="form-card">
+<h3>Criar perfil profissional</h3>
+<p class="sub">Cadastre-se grátis, explore o app e envie seus documentos quando quiser começar!</p>
+<div class="f-steps">
+<div class="f-step active" id="fs1"><div class="dot">1</div><div class="lbl">Dados</div></div>
+<div class="f-step" id="fs2"><div class="dot">2</div><div class="lbl">Especialidade</div></div>
+</div>
+<!-- Step 1: Basic info -->
+<div class="panel active" id="proS1">
+<div class="fg"><label>Nome completo *</label><input type="text" id="proName" placeholder="Seu nome"></div>
+<div class="fg"><label>E-mail *</label><input type="email" id="proEmail" placeholder="seu@email.com" readonly></div>
+<div class="fg"><label>CEP *</label><input type="text" id="proCep" placeholder="00000-000" maxlength="9"><div id="proCepFeedback" style="font-size:.78rem;margin-top:4px"></div></div>
+<button class="btn-next" onclick="proNext(2)">Continuar →</button>
+</div>
+<!-- Step 2: Specialty -->
+<div class="panel" id="proS2">
+<div class="fg"><label>Especialidade principal *</label>
+<select id="proSpec" onchange="updateRateLabel()">
+<option value="">Selecione...</option>
+<option value="Faxina / Diarista">Faxina / Diarista</option>
+<option value="Encanamento">Encanamento</option>
+<option value="Elétrica">Elétrica</option>
+<option value="Pintura">Pintura</option>
+<option value="Montagem de móveis">Montagem de móveis</option>
+<option value="Ar-condicionado">Ar-condicionado</option>
+<option value="Jardinagem">Jardinagem</option>
+<option value="Chaveiro">Chaveiro</option>
+<option value="Pet Sitter">Pet Sitter</option>
+<option value="Carreto">Carreto</option>
+<option value="Mudança">Mudança</option>
+<option value="Outro">Outro</option>
+</select>
+</div>
+<div class="fg"><label id="rateLbl">Valor por serviço (R$) *</label><input type="number" id="proRate" placeholder="Ex: 150"></div>
+<div class="fg"><label>Raio de atendimento</label>
+<select id="proRadius">
+<option>Até 5 km</option>
+<option>Até 10 km</option>
+<option>Até 20 km</option>
+<option>Até 30 km</option>
+<option>Toda a cidade</option>
+</select>
+</div>
+<div class="fg"><label>Sobre você</label><textarea id="proBio" rows="3" placeholder="Conte sobre sua experiência..."></textarea></div>
+<button class="btn-back" onclick="proNext(1)">← Voltar</button>
+<button class="btn-next" onclick="openTermsPro()">Ver termos e criar perfil 🚀</button>
+</div>
+<!-- Success -->
+<div class="panel" id="proS3" style="text-align:center;padding:20px 0">
+<div style="font-size:3rem">🎉</div>
+<h3 style="margin:10px 0">Perfil criado!</h3>
+<p style="color:var(--text2);font-size:.9rem">Agora envie seus documentos para começar a receber pedidos.</p>
+<div style="background:var(--pl);border-radius:var(--rs);padding:14px;margin-top:14px;text-align:left;font-size:.85rem">
+<div style="padding:4px 0">✅ Perfil criado</div>
+<div style="padding:4px 0;color:var(--p);font-weight:600">📄 Envie seus documentos para ativar</div>
+<div style="padding:4px 0;color:var(--text2)">✅ Documentos aprovados → receba serviços</div>
+</div>
+<button class="btn-next" style="margin-top:16px;width:100%" onclick="openM('docsM')">📤 Enviar documentos agora →</button>
+<a href="index.html" style="display:block;text-align:center;margin-top:10px;font-size:.85rem;color:var(--text2)">Ir para o app →</a>
+</div>
+</div>
+</div>
+</div>
+</section>
+
+<!-- COMO FUNCIONA PARA O PRO -->
+<section class="fade-in" style="background:var(--bg2);padding:60px 24px">
+<div style="max-width:1100px;margin:0 auto">
+<div class="stag">Como funciona</div>
+<h2 class="stitle">Simples assim</h2>
+<div class="how-grid">
+<div class="how-card"><div class="num">01</div><h4>Crie seu perfil</h4><p>Cadastro grátis em menos de 2 minutos. Sem burocracia.</p></div>
+<div class="how-card"><div class="num">02</div><h4>Receba pedidos</h4><p>Notificações em tempo real de clientes na sua área.</p></div>
+<div class="how-card"><div class="num">03</div><h4>Combine no chat</h4><p>Negocie preço e detalhes direto pelo app com segurança.</p></div>
+<div class="how-card"><div class="num">04</div><h4>Receba o pagamento</h4><p>Dinheiro liberado automaticamente após confirmação do serviço.</p></div>
+</div>
+</div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+<div class="ft-grid">
+<div><div class="ft-brand">Maridão App</div><p>Conectamos você a clientes verificados. Rápido, seguro e confiável.</p></div>
+<div><h5>Para clientes</h5><a href="index.html">Encontrar serviços</a><a href="index.html#profissionais">Ver profissionais</a></div>
+<div><h5>Para profissionais</h5><a href="#">Criar perfil</a><a href="#">Como funciona</a></div>
+<div><h5>Suporte</h5><a href="#">Ajuda</a><a href="#">Privacidade</a><a href="#">Termos</a><a href="#">Contato</a></div>
+</div>
+<div class="ft-bot">© 2025 Maridão App. Todos os direitos reservados. Feito com ❤️ no Brasil</div>
+</footer>
+
+<!-- === MODALS === -->
+
+<!-- LOGIN -->
+<div class="mo" id="loginM"><div class="md">
+<button class="md-close" onclick="closeM('loginM')">✕</button>
+<h3>Bem-vindo de volta 👋</h3><p class="msub">Entre para acessar sua conta.</p>
+<button class="btn-google" onclick="googleLogin()"><svg width="18" height="18" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg> Entrar com Google</button>
+<div class="divider">ou</div>
+<div class="fg"><label>E-mail</label><input type="email" id="logEmail" placeholder="seu@email.com"><div class="ferr" id="logEmailErr"></div></div>
+<div class="fg"><label>Senha</label><input type="password" id="logPass" placeholder="Sua senha"><div class="ferr" id="logPassErr"></div></div>
+<button class="btn-primary btn-full" id="logBtn" onclick="emailLogin()">Entrar →</button>
+<div class="switch">Não tem conta? <a onclick="closeM('loginM');openM('signupM')">Cadastre-se grátis</a></div>
+</div></div>
+
+<!-- SIGNUP Step 1 -->
+<div class="mo" id="signupM"><div class="md">
+<button class="md-close" onclick="closeM('signupM')">✕</button>
+<div id="sS1">
+<h3>Criar sua conta 🚀</h3><p class="msub">Grátis e sem complicação.</p>
+<button class="btn-google" onclick="googleLogin()"><svg width="18" height="18" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg> Cadastrar com Google</button>
+<div class="divider">ou</div>
+<div class="fg"><label>Nome completo *</label><input type="text" id="sName" placeholder="Seu nome"></div>
+<div class="fg"><label>E-mail *</label><input type="email" id="sEmail" placeholder="seu@email.com"><div class="ferr" id="sEmailErr"></div></div>
+<div class="fg"><label>CPF *</label><input type="text" id="sCPF" placeholder="000.000.000-00" maxlength="14"></div>
+<div class="fg"><label>Senha *</label><input type="password" id="sPass" placeholder="Mín. 8 chars, maiúscula, número e especial"><div class="ferr" id="sPassErr"></div></div>
+<button class="btn-primary btn-full" onclick="signupStep2()">Criar conta grátis →</button>
+<div class="switch">Já tem conta? <a onclick="closeM('signupM');openM('loginM')">Faça login</a></div>
+</div>
+<div id="sS2" style="display:none">
+<button style="background:none;color:var(--text2);margin-bottom:12px;font-size:.88rem;cursor:pointer" onclick="document.getElementById('sS1').style.display='block';document.getElementById('sS2').style.display='none'">← Voltar</button>
+<h3>Verificação de identidade 🔐</h3><p class="msub">Para segurança de todos, verifique sua identidade.</p>
+<div style="background:#FFF8E1;border-radius:var(--rs);padding:12px;font-size:.8rem;color:#B45309;margin-bottom:14px">🛡️ Documentos criptografados e nunca compartilhados.</div>
+<div class="upload-box" id="cUpDoc" onclick="simUpload('cUpDoc')"><div class="ui">📄</div><div class="ul">RG ou CNH (frente) *</div><div class="uh">Clique para enviar</div></div>
+<div class="upload-box" id="cUpSelfie" onclick="simUpload('cUpSelfie')"><div class="ui">🤳</div><div class="ul">Selfie segurando documento *</div><div class="uh">Confirma sua identidade</div></div>
+<label style="display:flex;gap:8px;font-size:.8rem;margin:14px 0;align-items:flex-start"><input type="checkbox" id="sTerms"><span>Concordo com os <b>Termos de Uso</b> e <b>Política de Privacidade</b>.</span></label>
+<button class="btn-primary btn-full" id="sBtn" onclick="signupSubmit()">Criar conta grátis →</button>
+</div>
+<div id="sS3" style="display:none;text-align:center;padding:20px 0">
+<div style="font-size:3rem">🎉</div><h3 style="margin:10px 0">Conta criada!</h3>
+<p style="color:var(--text2);font-size:.88rem;margin-bottom:16px">Documentos em análise. Você será notificado quando aprovado.</p>
+<button class="btn-primary btn-full" onclick="closeM('signupM')">Entendi →</button>
+</div>
+</div></div>
+
+<!-- PRO DOCS MODAL -->
+<div class="mo" id="docsM"><div class="md">
+<button class="md-close" onclick="closeM('docsM')">✕</button>
+<h3>Quase lá! Envie seus documentos 📄</h3>
+<p class="msub">Para aceitar serviços e receber pagamentos, precisamos verificar sua identidade.</p>
+<div style="background:#FFF8E1;border-radius:var(--rs);padding:12px;font-size:.8rem;color:#B45309;margin-bottom:14px">🛡️ Seus documentos são protegidos e nunca compartilhados com clientes.</div>
+<div class="fg"><label>CPF *</label><input type="text" id="dCPF" placeholder="000.000.000-00" maxlength="14"></div>
+<div class="fg"><label>Data de nascimento *</label><input type="date" id="dDob"></div>
+<div class="upload-box" id="dUpDoc" onclick="simUpload('dUpDoc')"><div class="ui">📄</div><div class="ul">RG ou CNH (frente) *</div><div class="uh">Clique para enviar</div></div>
+<div class="upload-box" id="dUpSelfie" onclick="simUpload('dUpSelfie')"><div class="ui">🤳</div><div class="ul">Selfie segurando documento *</div><div class="uh">Confirma sua identidade</div></div>
+<div class="upload-box" id="dUpAddr" onclick="simUpload('dUpAddr')"><div class="ui">🏠</div><div class="ul">Comprovante de residência *</div><div class="uh">Últimos 3 meses</div></div>
+<div class="fg"><label>Chave PIX para receber *</label><input type="text" id="dPix" placeholder="CPF, e-mail ou chave aleatória"></div>
+<label style="display:flex;gap:8px;font-size:.8rem;margin:14px 0;align-items:flex-start"><input type="checkbox" id="dTerms"><span>Concordo com os <b>Termos de Uso</b> e a cobrança de <b>25% de comissão</b> por serviço.</span></label>
+<button class="btn-primary btn-full" onclick="submitProDocs()">Enviar documentos e começar a trabalhar →</button>
+</div></div>
+
+<!-- PENDING MODAL -->
+<div class="mo" id="pendingM"><div class="md" style="text-align:center">
+<button class="md-close" onclick="closeM('pendingM')">✕</button>
+<div style="font-size:3rem">⏳</div><h3 style="margin:10px 0">Documentos em análise</h3>
+<p style="color:var(--text2);font-size:.88rem;margin-bottom:16px">Seus documentos estão sendo analisados. Assim que aprovados, você poderá aceitar serviços e receber pagamentos!</p>
+<div style="background:var(--gl);border-radius:var(--rs);padding:14px;text-align:left;margin-bottom:16px">
+<div style="font-size:.85rem;padding:4px 0">✅ Documentos enviados</div>
+<div style="font-size:.85rem;padding:4px 0;color:var(--p)">⏳ Análise em andamento (até 24h)</div>
+<div style="font-size:.85rem;padding:4px 0;color:var(--text2)">💰 Comece a receber serviços</div>
+</div>
+<button class="btn-primary btn-full" onclick="closeM('pendingM')">Entendi, vou aguardar</button>
+</div></div>
+
+<!-- TERMS PRO MODAL -->
+<div class="mo" id="termsProM"><div class="md" style="max-width:500px">
+<button class="md-close" onclick="closeM('termsProM')">✕</button>
+<h3 style="margin-bottom:4px">📋 Termos de adesão</h3>
+<p style="color:var(--text2);font-size:.88rem;margin-bottom:16px">Leia com atenção antes de criar seu perfil.</p>
+<div style="background:var(--pl);border-radius:var(--rs);padding:16px;font-size:.85rem;line-height:1.6;max-height:320px;overflow-y:auto;margin-bottom:16px">
+<p><strong>💳 Pagamentos via Mercado Pago</strong><br>
+Todos os pagamentos realizados pelos clientes são processados exclusivamente pelo <strong>Mercado Pago</strong>. O valor é creditado em sua conta Mercado Pago em até 14 dias úteis após a conclusão do serviço.</p>
+<p><strong>📊 Taxa de plataforma: 25%</strong><br>
+O Maridão App retém <strong>25% do valor combinado</strong> a título de taxa de serviço, que cobre: processamento de pagamento, seguro básico, suporte e manutenção da plataforma. Você recebe os <strong>75% restantes</strong>.</p>
+<p><strong>Exemplo:</strong> Se você combinar R$&nbsp;200 com o cliente, você receberá R$&nbsp;150 (75%).</p>
+<p><strong>📄 Verificação de identidade</strong><br>
+Para começar a receber serviços, você precisará enviar RG/CNH, selfie e comprovante de endereço. A aprovação ocorre em até 24 horas.</p>
+<p><strong>⚠️ Cancelamentos</strong><br>
+Cancelamentos em cima da hora podem resultar em avaliação negativa e suspensão temporária da conta.</p>
+<p>Ao criar seu perfil você declara ter lido e concordar com estes termos e com a <a href="#" style="color:var(--p)">Política de Privacidade</a> do Maridão App.</p>
+</div>
+<label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:.88rem;margin-bottom:16px">
+<input type="checkbox" id="proTermsCheck" style="margin-top:3px;flex-shrink:0">
+<span>Li e aceito os termos de adesão, incluindo a taxa de 25% e os pagamentos via Mercado Pago.</span>
+</label>
+<button class="btn-primary btn-full" id="submitProBtn" onclick="submitPro()">Confirmar e criar perfil →</button>
+</div></div>
+
+<script src="js/firebase.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/pro.js"></script>
+<script>
+// === INIT ===
+document.addEventListener('DOMContentLoaded', () => {
+  // Theme
+  try { if (localStorage.getItem('mt') === 'dark') { document.documentElement.setAttribute('data-theme', 'dark'); document.getElementById('themeBtn').textContent = '☀️'; } } catch (e) {}
+  // Navbar scroll
+  window.addEventListener('scroll', () => document.getElementById('navbar').classList.toggle('scrolled', window.scrollY > 20));
+  // Scroll animations
+  const obs = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) e.target.classList.add('vis'); }), { threshold: .1 });
+  document.querySelectorAll('.fade-in').forEach(el => obs.observe(el));
+  // Date min: mínimo amanhã
+  const tmr = new Date(); tmr.setDate(tmr.getDate() + 1);
+  const tmrStr = tmr.getFullYear() + '-' + String(tmr.getMonth()+1).padStart(2,'0') + '-' + String(tmr.getDate()).padStart(2,'0');
+  document.querySelectorAll('input[type="date"]').forEach(el => el.setAttribute('min', tmrStr));
+  // Close dropdown on outside click
+  document.addEventListener('click', e => { if (!e.target.closest('.user-area')) document.getElementById('userDd').classList.remove('show'); });
+  // Scroll to form if hash present
+  if (window.location.hash === '#form') {
+    setTimeout(() => { const el = document.getElementById('trabalhe-conosco'); if (el) el.scrollIntoView({ behavior: 'smooth' }); }, 300);
+  }
+});
+</script>
+</body>
+</html>

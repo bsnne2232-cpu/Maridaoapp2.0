@@ -21,7 +21,7 @@
 <nav id="navbar">
 <a href="#" class="logo">Maridão <span>App</span></a>
 <div class="nav-links">
-<a href="#categorias">Serviços</a><a href="#como-funciona">Como funciona</a><a href="#profissionais">Profissionais</a><a href="#avaliacoes">Avaliações</a><a href="#trabalhe-conosco" class="hl">Trabalhe conosco</a>
+<a href="#categorias">Serviços</a><a href="#como-funciona">Como funciona</a><a href="#profissionais">Profissionais</a><a href="#avaliacoes">Avaliações</a><a href="trabalhe.html" class="hl">Trabalhe conosco</a>
 </div>
 <div class="nav-right">
 <button class="theme-btn" id="themeBtn" onclick="toggleTheme()">🌙</button>
@@ -130,58 +130,8 @@
 <div class="cta fade-in">
 <h2>Seu próximo serviço a um toque de distância</h2>
 <p>Cadastre-se grátis e encontre o profissional ideal em minutos.</p>
-<div class="btns"><button class="btn-w" onclick="openM('signupM')">Criar conta grátis →</button><a href="#trabalhe-conosco" class="btn-o">Quero ser profissional →</a></div>
+<div class="btns"><button class="btn-w" onclick="openM('signupM')">Criar conta grátis →</button><a href="trabalhe.html" class="btn-o">Quero ser profissional →</a></div>
 </div>
-
-<!-- PRO SIGNUP -->
-<section id="trabalhe-conosco" class="fade-in">
-<div class="stag">Para profissionais</div>
-<h2 class="stitle">Trabalhe com a gente e aumente sua renda</h2>
-<div class="work">
-<div class="work-grid">
-<div>
-<div class="ben-item"><div class="ben-ic">💰</div><div><h4>Sem mensalidade</h4><p>Pague apenas 25% por serviço realizado. Zero custo pra se cadastrar.</p></div></div>
-<div class="ben-item"><div class="ben-ic">📱</div><div><h4>Clientes na sua região</h4><p>Receba pedidos perto de você.</p></div></div>
-<div class="ben-item"><div class="ben-ic">⚡</div><div><h4>Pagamento rápido</h4><p>Receba em até 1 hora após confirmação.</p></div></div>
-<div class="ben-item"><div class="ben-ic">🛡️</div><div><h4>Você no controle</h4><p>Escolha horários e aceite só o que quiser.</p></div></div>
-<div class="wk-stats"><div class="wk-stat"><div class="v">R$ 3.800</div><div class="l">Média/mês dos tops</div></div><div class="wk-stat"><div class="v">24h</div><div class="l">Aprovação</div></div></div>
-</div>
-<div class="form-card">
-<h3>Criar perfil profissional</h3>
-<p class="sub">Cadastre-se grátis, explore o app e envie seus documentos quando quiser começar!</p>
-<div class="f-steps"><div class="f-step active" id="fs1"><div class="dot">1</div><div class="lbl">Dados</div></div><div class="f-step" id="fs2"><div class="dot">2</div><div class="lbl">Especialidade</div></div></div>
-<!-- Step 1: Basic info only -->
-<div class="panel active" id="proS1">
-<div class="fg"><label>Nome completo *</label><input type="text" id="proName" placeholder="Seu nome"></div>
-<div class="fg"><label>E-mail *</label><input type="email" id="proEmail" placeholder="seu@email.com" readonly></div>
-<div class="fg"><label>CEP *</label><input type="text" id="proCep" placeholder="00000-000" maxlength="9"><div id="proCepFeedback" style="font-size:.78rem;margin-top:4px"></div></div>
-<button class="btn-next" onclick="proNext(2)">Continuar →</button>
-</div>
-<!-- Step 2: Specialty -->
-<div class="panel" id="proS2">
-<div class="fg"><label>Especialidade principal *</label><select id="proSpec" onchange="updateRateLabel()"><option value="">Selecione...</option><option value="Faxina / Diarista">Faxina / Diarista</option><option value="Encanamento">Encanamento</option><option value="Elétrica">Elétrica</option><option value="Pintura">Pintura</option><option value="Montagem de móveis">Montagem de móveis</option><option value="Ar-condicionado">Ar-condicionado</option><option value="Jardinagem">Jardinagem</option><option value="Chaveiro">Chaveiro</option><option value="Pet Sitter">Pet Sitter</option><option value="Carreto">Carreto</option><option value="Mudança">Mudança</option><option value="Outro">Outro</option></select></div>
-<div class="fg"><label id="rateLbl">Valor por serviço (R$) *</label><input type="number" id="proRate" placeholder="Ex: 150"></div>
-<div class="fg"><label>Raio de atendimento</label><select id="proRadius"><option>Até 5 km</option><option>Até 10 km</option><option>Até 20 km</option><option>Até 30 km</option><option>Toda a cidade</option></select></div>
-<div class="fg"><label>Sobre você</label><textarea id="proBio" rows="3" placeholder="Conte sobre sua experiência..."></textarea></div>
-<button class="btn-back" onclick="proNext(1)">← Voltar</button>
-<button class="btn-next" onclick="openTermsPro()">Ver termos e criar perfil 🚀</button>
-</div>
-<!-- Success -->
-<div class="panel" id="proS3" style="text-align:center;padding:20px 0">
-<div style="font-size:3rem">🎉</div>
-<h3 style="margin:10px 0">Perfil criado!</h3>
-<p style="color:var(--text2);font-size:.9rem">Agora envie seus documentos para começar a receber pedidos.</p>
-<div style="background:var(--pl);border-radius:var(--rs);padding:14px;margin-top:14px;text-align:left;font-size:.85rem">
-<div style="padding:4px 0">✅ Perfil criado</div>
-<div style="padding:4px 0;color:var(--p);font-weight:600">📄 Envie seus documentos para ativar</div>
-<div style="padding:4px 0;color:var(--text2)">✅ Documentos aprovados → receba serviços</div>
-</div>
-<button class="btn-next" style="margin-top:16px;width:100%" onclick="openM('docsM')">📤 Enviar documentos agora →</button>
-</div>
-</div>
-</div>
-</div>
-</section>
 
 <!-- FOOTER -->
 <footer>

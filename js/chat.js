@@ -24,6 +24,7 @@ const BLOCK = [
 // === REAL-TIME CHAT STATE ===
 let _chatListener = null;
 let _seenMsgIds = new Set();
+let _pendingSeqs = new Set(); // seqs de mensagens enviadas localmente (renderização otimista)
 let _lastProPrice = 0; // último preço mencionado pelo profissional
 
 // === OPEN CHAT (CLIENT SIDE) ===
@@ -32,6 +33,7 @@ async function openChat(p, s) {
   chatSt = { msgs: 0, details: { what: false, where: false, when: false }, agreed: false, price: 0 };
   window.currentBookingId = null;
   _seenMsgIds = new Set();
+  _pendingSeqs = new Set();
   _lastProPrice = 0;
   if (_chatListener) { _chatListener(); _chatListener = null; }
 
@@ -96,7 +98,10 @@ async function openChat(p, s) {
     // Real-time listener for ALL messages on this booking
     _chatListener = db.collection('messages')
       .where('bookingId', '==', ref.id)
-      .onSnapshot(snap => renderChatSnapshot(snap), err => console.error('chat listener:', err));
+      .onSnapshot(snap => renderChatSnapshot(snap), err => {
+        console.error('chat listener:', err);
+        if (err.code === 'permission-denied') addMsg('⚠️ Sem permissão para acessar mensagens. Verifique as regras do Firestore.', 'blk');
+      });
   } catch (e) {
     console.error('openChat error:', e);
     addMsg('⚠️ Erro ao iniciar chat. Tente novamente.', 'blk');
@@ -111,6 +116,11 @@ function renderChatSnapshot(snap) {
   docs.forEach(d => {
     if (_seenMsgIds.has(d.id)) return;
     _seenMsgIds.add(d.id);
+    // Mensagem já renderizada otimisticamente (o cliente enviou)
+    if (d.sender === 'user' && d.userId === (CU && CU.uid) && _pendingSeqs.has(d.seq)) {
+      _pendingSeqs.delete(d.seq);
+      return; // já está no DOM
+    }
     let cls;
     if (d.sender === 'sys') cls = 'sys';
     else if (d.sender === 'user') cls = 'sent';
@@ -161,19 +171,21 @@ function sendMsg() {
     setTimeout(() => addMsg('⚠️ Valor já combinado em R$ ' + chatSt.price + '. Use o botão Pagar abaixo.', 'sys'), 200);
     return;
   }
-  if (!CU || !window.currentBookingId) {
-    addMsg('⚠️ Faça login para enviar mensagens.', 'blk');
-    return;
-  }
-  // Save to Firestore — listener will render it
+  if (!CU) { addMsg('⚠️ Faça login para enviar mensagens.', 'blk'); return; }
+  if (!window.currentBookingId) { addMsg('⚠️ Chat não iniciado. Feche e reabra o chat.', 'blk'); return; }
+  // Renderização otimista: exibe imediatamente no DOM
+  const seq = Date.now();
+  _pendingSeqs.add(seq);
+  addMsg(msg, 'sent');
+  // Salva no Firestore — listener confirma e sincroniza
   db.collection('messages').add({
     bookingId: window.currentBookingId,
     text: msg,
     sender: 'user',
     userId: CU.uid,
-    seq: Date.now(),
+    seq: seq,
     at: firebase.firestore.FieldValue.serverTimestamp()
-  }).catch(e => console.error('sendMsg error:', e));
+  }).catch(e => { console.error('sendMsg error:', e); _pendingSeqs.delete(seq); });
   chatSt.msgs++;
 
   // Detect price agreement — aceita número na mensagem OU preço que o pro mencionou
@@ -218,6 +230,7 @@ function chatPayNow() {
 async function reopenClientChat(bookingId, proName, proIcon) {
   if (!CU) return;
   _seenMsgIds = new Set();
+  _pendingSeqs = new Set();
   _lastProPrice = 0;
   chatSt = { msgs: 0, details: { what: false, where: false, when: false }, agreed: false, price: 0 };
   if (_chatListener) { _chatListener(); _chatListener = null; }
@@ -250,7 +263,10 @@ async function reopenClientChat(bookingId, proName, proIcon) {
   // Listener real-time no booking existente
   _chatListener = db.collection('messages')
     .where('bookingId', '==', bookingId)
-    .onSnapshot(snap => renderChatSnapshot(snap), err => console.error('reopen listener:', err));
+    .onSnapshot(snap => renderChatSnapshot(snap), err => {
+      console.error('reopen listener:', err);
+      if (err.code === 'permission-denied') addMsg('⚠️ Sem permissão para acessar mensagens.', 'blk');
+    });
 }
 
 // === CARREGAR CHATS DO CLIENTE ===
