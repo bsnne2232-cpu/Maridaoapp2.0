@@ -322,58 +322,96 @@ const _SPEC_MAP = [
   { key: 'Carreto',           label: 'Carreto',              icon: '🚚' },
 ];
 
-// === RENDERIZA SEÇÕES TOP 3 POR ESPECIALIDADE ===
-function renderTopProsSections() {
+// === RENDERIZA SEÇÕES TOP 3 POR ESPECIALIDADE (Firestore + PDB) ===
+async function renderTopProsSections() {
   const container = document.getElementById('prosSections');
   if (!container) return;
-  container.innerHTML = '';
+  container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text2)">🔍 Carregando profissionais...</div>';
   _showProsSections();
 
+  // Busca todos os profissionais ativos do Firestore (uma única consulta)
+  const fsBySpec = {}; // spec label → array de pros
+  try {
+    const snap = await db.collection('professionals').where('status', '==', 'active').limit(60).get();
+    snap.forEach(doc => {
+      const d = doc.data();
+      const specKey = d.spec || '';
+      if (!fsBySpec[specKey]) fsBySpec[specKey] = [];
+      fsBySpec[specKey].push({ id: doc.id, ...d, _fromFirestore: true });
+    });
+  } catch (e) { console.warn('Firestore pros load:', e); }
+
+  container.innerHTML = '';
+
   for (const spec of _SPEC_MAP) {
-    const list = PDB[spec.key] || [];
-    const top3 = list.slice(0, 3);
-    if (!top3.length) continue;
+    // Profissionais reais do Firestore para esta especialidade
+    const fsForSpec = (fsBySpec[spec.label] || fsBySpec[spec.key] || []);
+    // Profissionais estáticos do PDB como complemento
+    const staticList = (PDB[spec.key] || []).map(p => ({
+      _static: true, id: 'static_' + p.n,
+      name: p.n, spec: spec.key, rate: p.p || 0, icon: p.e,
+      rating: p.r, reviewCount: p.rv, dist: p.d, tags: p.t, top: p.top
+    }));
+
+    // Junta: Firestore primeiro, depois PDB até completar 3 (sem duplicar por nome)
+    const combined = [...fsForSpec];
+    for (const p of staticList) {
+      if (combined.length >= 3) break;
+      if (!combined.some(x => (x.name || x.n) === p.name)) combined.push(p);
+    }
+    if (!combined.length) continue;
 
     const section = document.createElement('div');
     section.className = 'spec-section';
     section.dataset.specKey = spec.key;
 
-    // Cabeçalho da especialidade
+    // Cabeçalho
+    const totalReal = fsForSpec.length;
     const hdr = document.createElement('div');
     hdr.className = 'spec-header';
     hdr.innerHTML =
       '<div class="spec-title">' +
         '<div class="spec-ic">' + esc(spec.icon) + '</div>' +
-        '<span>' + esc(spec.label) + '</span>' +
+        '<span>' + esc(spec.label) + (totalReal > 0 ? ' <span style="font-size:.72rem;font-weight:500;color:var(--p);background:var(--pl);padding:2px 7px;border-radius:10px;margin-left:6px">' + totalReal + ' disponível' + (totalReal > 1 ? 'is' : '') + '</span>' : '') + '</span>' +
       '</div>' +
       '<button class="spec-more-btn" onclick="filterSpec(\'' + esc(spec.label) + '\')">Ver todos →</button>';
     section.appendChild(hdr);
 
-    // Grid top 3
+    // Grid com até 3 profissionais
     const grid = document.createElement('div');
     grid.className = 'pros-grid';
-    top3.forEach(p => {
-      const pid = 'static_' + p.n;
+    combined.slice(0, 3).forEach(p => {
+      const pid = p.id || ('static_' + (p.name || p.n));
+      const name = p.name || p.n || '—';
+      const rate = p.rate || p.p || 0;
+      const icon = p.icon || p.e || spec.icon;
+      const rating = p.rating || p.r || null;
+      const reviews = p.reviewCount || p.rv || 0;
+      const dist = p.dist || p.d || '';
+      const tags = p.tags || (p.bio ? p.bio.split(',').slice(0, 3) : (p.t || []));
+      const isVerified = p.docsStatus === 'approved';
       const isFaved = userFavorites.has(pid);
-      const tagsHtml = (p.t || []).slice(0, 3).map(t => '<span>' + esc(String(t).trim()) + '</span>').join('');
+      const tagsHtml = tags.slice(0, 3).map(t => '<span>' + esc(String(t).trim()) + '</span>').join('');
+      const badge = isVerified ? ' ✅' : (p.top ? ' ⭐' : '');
+
       const card = document.createElement('div');
       card.className = 'pro-card';
       card.innerHTML =
         '<div class="pro-hdr">' +
-          '<div class="pro-av">' + esc(p.e) + '</div>' +
+          '<div class="pro-av">' + esc(String(icon)) + '</div>' +
           '<div style="flex:1;min-width:0">' +
-            '<div class="pro-nm">' + esc(p.n) + (p.top ? ' ⭐' : '') + '</div>' +
+            '<div class="pro-nm">' + esc(name) + badge + '</div>' +
             '<div class="pro-rl">' + esc(spec.label) + '</div>' +
           '</div>' +
           '<button class="fav-btn' + (isFaved ? ' faved' : '') + '" data-pid="' + esc(pid) + '" title="Favoritar">' + (isFaved ? '❤️' : '🤍') + '</button>' +
         '</div>' +
-        '<div class="pro-rt">★ ' + esc(String(p.r)) + ' <span style="font-weight:400;color:var(--text2)">(' + esc(String(p.rv)) + ')</span></div>' +
-        (p.d ? '<div style="font-size:.78rem;color:var(--text2);margin-bottom:8px">📍 ' + esc(p.d) + '</div>' : '') +
+        (rating ? '<div class="pro-rt">★ ' + esc(String(rating)) + ' <span style="font-weight:400;color:var(--text2)">(' + esc(String(reviews)) + ')</span></div>' : '') +
+        (dist ? '<div style="font-size:.78rem;color:var(--text2);margin-bottom:8px">📍 ' + esc(String(dist)) + '</div>' : '') +
         '<div class="pro-tags">' + tagsHtml + '</div>' +
-        (p.p ? '<div class="pro-pr">A partir de <b>R$ ' + esc(String(p.p)) + '</b></div>' : '') +
+        (rate ? '<div class="pro-pr">A partir de <b>R$ ' + esc(String(rate)) + '</b></div>' : '') +
         '<button class="btn-book">Contratar →</button>';
-      card.querySelector('.fav-btn').addEventListener('click', e => { e.stopPropagation(); toggleFavorite(pid, p.n); });
-      card.querySelector('.btn-book').addEventListener('click', () => quickBook(p.n, spec.key));
+      card.querySelector('.fav-btn').addEventListener('click', e => { e.stopPropagation(); toggleFavorite(pid, name); });
+      card.querySelector('.btn-book').addEventListener('click', () => quickBook(name, p._fromFirestore ? (p.spec || spec.key) : spec.key));
       grid.appendChild(card);
     });
 
