@@ -104,6 +104,15 @@ section{padding:80px 24px;max-width:1100px;margin:0 auto}
 .pro-pr{font-size:.85rem;color:var(--text2);margin-bottom:14px;font-family:var(--font2)}.pro-pr b{color:var(--text)}
 .btn-book{width:100%;padding:12px;border-radius:var(--rs);background:var(--accent);color:#fff;font-weight:700;font-size:.88rem;transition:all .2s}
 .btn-book:hover{background:var(--accentd)}
+/* SPECIALTY SECTIONS */
+.spec-section{margin-bottom:52px;scroll-margin-top:80px;border-radius:var(--r);padding:24px;background:var(--card);border:1px solid var(--border)}
+.spec-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;padding-bottom:14px;border-bottom:2px solid var(--border)}
+.spec-title{display:flex;align-items:center;gap:10px;font-size:1.05rem;font-weight:800;color:var(--text)}
+.spec-ic{width:38px;height:38px;background:var(--pl);border-radius:var(--rs);display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0}
+.spec-more-btn{font-size:.85rem;color:var(--p);font-weight:600;background:var(--pl);border:none;cursor:pointer;padding:7px 14px;border-radius:var(--rs);transition:background .15s}
+.spec-more-btn:hover{background:var(--ps)}
+.spec-section.spec-highlight{animation:specPulse .9s ease}
+@keyframes specPulse{0%,100%{border-color:var(--border)}50%{border-color:var(--p);box-shadow:0 0 0 3px var(--ps)}}
 /* TRUST */
 .trust-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px}
 .trust-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:32px;text-align:center;transition:all .2s}

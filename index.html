@@ -73,13 +73,15 @@
 </div>
 </section>
 
-<!-- PROFESSIONALS SEARCH -->
+<!-- PROFESSIONALS TOP 3 PER SPECIALTY -->
 <section id="profissionais" class="fade-in">
-<div class="stag">Encontre profissionais</div>
-<h2 class="stitle">Busque, favorite e agende</h2>
+<div class="stag">Profissionais verificados</div>
+<h2 class="stitle">Contrate agora — top 3 por especialidade</h2>
+<!-- Barra de busca por nome -->
 <div class="pros-search-bar">
-  <input type="text" id="prosNameSearch" placeholder="Buscar por nome...">
-  <select id="prosSpecFilter" onchange="searchProsList()">
+  <input type="text" id="prosNameSearch" placeholder="Buscar profissional por nome..." onkeydown="if(event.key==='Enter')searchProsList()">
+  <!-- prosSpecFilter oculto: usado programaticamente por filterSpec() e heroSearchAction() -->
+  <select id="prosSpecFilter" style="display:none">
     <option value="">Todas especialidades</option>
     <option value="Faxina / Diarista">Faxina / Diarista</option>
     <option value="Encanamento">Encanamento</option>
@@ -100,8 +102,12 @@
 <div id="prosEmpty" style="display:none;text-align:center;padding:48px;color:var(--text2)">
   <div style="font-size:3rem;margin-bottom:12px">😔</div>
   <p id="prosEmptyMsg">Nenhum profissional encontrado.</p>
+  <button class="btn btn-ghost" onclick="clearProSearch()" style="margin-top:12px">← Ver todas as especialidades</button>
 </div>
-<div class="pros-grid" id="prosGrid"></div>
+<!-- Grid de resultados de busca (oculto por padrão) -->
+<div class="pros-grid" id="prosGrid" style="display:none"></div>
+<!-- Seções top 3 por especialidade (view padrão) -->
+<div id="prosSections"></div>
 </section>
 
 <!-- TRUST -->

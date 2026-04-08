@@ -15,15 +15,24 @@ function renderCats() {
 }
 
 function openSvc(s) {
-  // Filtra a seção de profissionais pela especialidade clicada
-  const specFilter = document.getElementById('prosSpecFilter');
-  if (specFilter) {
-    const map = { 'Montagem': 'Montagem de móveis', 'Faxina': 'Faxina / Diarista' };
-    const val = map[s] || s;
-    for (let i = 0; i < specFilter.options.length; i++) {
-      if (specFilter.options[i].value === val) { specFilter.selectedIndex = i; break; }
+  // Mapa de nomes curtos (CATS) para chaves do PDB/_SPEC_MAP
+  const keyMap = { 'Montagem': 'Montagem de móveis', 'Faxina': 'Faxina' };
+  const specKey = keyMap[s] || s;
+  _showProsSections();
+  // Rola até a seção da especialidade correspondente
+  const container = document.getElementById('prosSections');
+  if (container) {
+    const target = container.querySelector('[data-spec-key="' + CSS.escape(specKey) + '"]');
+    if (target) {
+      const mainSec = document.getElementById('profissionais');
+      if (mainSec) mainSec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      setTimeout(() => {
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        target.classList.add('spec-highlight');
+        setTimeout(() => target.classList.remove('spec-highlight'), 1200);
+      }, 400);
+      return;
     }
-    if (typeof searchProsList === 'function') searchProsList();
   }
   const sec = document.getElementById('profissionais');
   if (sec) sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -140,12 +149,13 @@ function toggleFavFilter() {
     btn.textContent = showingFavs ? '❤️ Favoritos' : '🤍 Favoritos';
     btn.classList.toggle('active-fav', showingFavs);
   }
-  if (showingFavs) renderFavoritesList();
-  else searchProsList();
+  if (showingFavs) { _hideProsSections(); renderFavoritesList(); }
+  else clearProSearch();
 }
 
 async function renderFavoritesList() {
   if (!CU) { reqLogin(); return; }
+  _hideProsSections();
   const grid = document.getElementById('prosGrid');
   const emptyEl = document.getElementById('prosEmpty');
   const msgEl = document.getElementById('prosEmptyMsg');
@@ -157,6 +167,7 @@ async function renderFavoritesList() {
     return;
   }
   if (emptyEl) emptyEl.style.display = 'none';
+  grid.style.display = '';
   // Busca cada favorito no Firestore (até 10)
   const pros = [];
   for (const pid of Array.from(userFavorites).slice(0, 10)) {
@@ -186,12 +197,17 @@ async function searchProsList() {
   const nameFilter = (document.getElementById('prosNameSearch') ? document.getElementById('prosNameSearch').value : '').trim().toLowerCase();
   const specFilter = document.getElementById('prosSpecFilter') ? document.getElementById('prosSpecFilter').value : '';
 
+  // Sem filtro: exibe seções por especialidade
+  if (!nameFilter && !specFilter) { _showProsSections(); return; }
+
+  // Com filtro: esconde seções e busca em grid
+  _hideProsSections();
   const loadEl = document.getElementById('prosLoading');
   const emptyEl = document.getElementById('prosEmpty');
   const grid = document.getElementById('prosGrid');
   if (loadEl) loadEl.style.display = 'block';
   if (emptyEl) emptyEl.style.display = 'none';
-  if (grid) grid.innerHTML = '';
+  if (grid) { grid.innerHTML = ''; grid.style.display = ''; }
 
   const pros = [];
 
@@ -211,10 +227,9 @@ async function searchProsList() {
   // Fallback / complemento com dados estáticos do PDB
   if (pros.length < 6) {
     for (const [spec, list] of Object.entries(PDB)) {
-      if (specFilter && spec !== specFilter) continue;
+      if (specFilter && spec !== specFilter && spec + ' / Diarista' !== specFilter) continue;
       for (const p of list) {
         if (nameFilter && !p.n.toLowerCase().includes(nameFilter)) continue;
-        // Evita duplicata por nome
         if (pros.some(x => (x.name || x.n) === p.n)) continue;
         pros.push({ _static: true, id: 'static_' + p.n, name: p.n, spec, rate: p.p || 0, icon: p.e, rating: p.r, reviewCount: p.rv, dist: p.d, tags: p.t, top: p.top });
       }
@@ -232,6 +247,7 @@ function renderProCards(pros) {
   const msgEl = document.getElementById('prosEmptyMsg');
   if (!grid) return;
   grid.innerHTML = '';
+  grid.style.display = '';
   if (pros.length === 0) {
     if (emptyEl) emptyEl.style.display = 'block';
     if (msgEl) msgEl.textContent = 'Nenhum profissional encontrado.';
@@ -289,7 +305,121 @@ function renderProCards(pros) {
   });
 }
 
-function renderPros() { searchProsList(); }
+function renderPros() { renderTopProsSections(); }
+
+// === MAPA DE ESPECIALIDADES (ordem de exibição) ===
+const _SPEC_MAP = [
+  { key: 'Faxina',            label: 'Faxina / Diarista',   icon: '🧹' },
+  { key: 'Encanamento',       label: 'Encanamento',          icon: '🔧' },
+  { key: 'Elétrica',          label: 'Elétrica',             icon: '⚡' },
+  { key: 'Pintura',           label: 'Pintura',              icon: '🪟' },
+  { key: 'Montagem de móveis',label: 'Montagem de móveis',   icon: '🛠️' },
+  { key: 'Ar-condicionado',   label: 'Ar-condicionado',      icon: '❄️' },
+  { key: 'Jardinagem',        label: 'Jardinagem',           icon: '🌿' },
+  { key: 'Chaveiro',          label: 'Chaveiro',             icon: '🔒' },
+  { key: 'Pet Sitter',        label: 'Pet Sitter',           icon: '🐾' },
+  { key: 'Mudança',           label: 'Mudança',              icon: '📦' },
+  { key: 'Carreto',           label: 'Carreto',              icon: '🚚' },
+];
+
+// === RENDERIZA SEÇÕES TOP 3 POR ESPECIALIDADE ===
+function renderTopProsSections() {
+  const container = document.getElementById('prosSections');
+  if (!container) return;
+  container.innerHTML = '';
+  _showProsSections();
+
+  for (const spec of _SPEC_MAP) {
+    const list = PDB[spec.key] || [];
+    const top3 = list.slice(0, 3);
+    if (!top3.length) continue;
+
+    const section = document.createElement('div');
+    section.className = 'spec-section';
+    section.dataset.specKey = spec.key;
+
+    // Cabeçalho da especialidade
+    const hdr = document.createElement('div');
+    hdr.className = 'spec-header';
+    hdr.innerHTML =
+      '<div class="spec-title">' +
+        '<div class="spec-ic">' + esc(spec.icon) + '</div>' +
+        '<span>' + esc(spec.label) + '</span>' +
+      '</div>' +
+      '<button class="spec-more-btn" onclick="filterSpec(\'' + esc(spec.label) + '\')">Ver todos →</button>';
+    section.appendChild(hdr);
+
+    // Grid top 3
+    const grid = document.createElement('div');
+    grid.className = 'pros-grid';
+    top3.forEach(p => {
+      const pid = 'static_' + p.n;
+      const isFaved = userFavorites.has(pid);
+      const tagsHtml = (p.t || []).slice(0, 3).map(t => '<span>' + esc(String(t).trim()) + '</span>').join('');
+      const card = document.createElement('div');
+      card.className = 'pro-card';
+      card.innerHTML =
+        '<div class="pro-hdr">' +
+          '<div class="pro-av">' + esc(p.e) + '</div>' +
+          '<div style="flex:1;min-width:0">' +
+            '<div class="pro-nm">' + esc(p.n) + (p.top ? ' ⭐' : '') + '</div>' +
+            '<div class="pro-rl">' + esc(spec.label) + '</div>' +
+          '</div>' +
+          '<button class="fav-btn' + (isFaved ? ' faved' : '') + '" data-pid="' + esc(pid) + '" title="Favoritar">' + (isFaved ? '❤️' : '🤍') + '</button>' +
+        '</div>' +
+        '<div class="pro-rt">★ ' + esc(String(p.r)) + ' <span style="font-weight:400;color:var(--text2)">(' + esc(String(p.rv)) + ')</span></div>' +
+        (p.d ? '<div style="font-size:.78rem;color:var(--text2);margin-bottom:8px">📍 ' + esc(p.d) + '</div>' : '') +
+        '<div class="pro-tags">' + tagsHtml + '</div>' +
+        (p.p ? '<div class="pro-pr">A partir de <b>R$ ' + esc(String(p.p)) + '</b></div>' : '') +
+        '<button class="btn-book">Contratar →</button>';
+      card.querySelector('.fav-btn').addEventListener('click', e => { e.stopPropagation(); toggleFavorite(pid, p.n); });
+      card.querySelector('.btn-book').addEventListener('click', () => quickBook(p.n, spec.key));
+      grid.appendChild(card);
+    });
+
+    section.appendChild(grid);
+    container.appendChild(section);
+  }
+}
+
+// === HELPERS DE VISIBILIDADE DAS SEÇÕES ===
+function _showProsSections() {
+  const sections = document.getElementById('prosSections');
+  const grid = document.getElementById('prosGrid');
+  const loading = document.getElementById('prosLoading');
+  const empty = document.getElementById('prosEmpty');
+  if (sections) sections.style.display = 'block';
+  if (grid) { grid.style.display = 'none'; grid.innerHTML = ''; }
+  if (loading) loading.style.display = 'none';
+  if (empty) empty.style.display = 'none';
+}
+
+function _hideProsSections() {
+  const sections = document.getElementById('prosSections');
+  if (sections) sections.style.display = 'none';
+  const grid = document.getElementById('prosGrid');
+  if (grid) grid.style.display = '';
+}
+
+function clearProSearch() {
+  const nameSearch = document.getElementById('prosNameSearch');
+  const specFilter = document.getElementById('prosSpecFilter');
+  if (nameSearch) nameSearch.value = '';
+  if (specFilter) specFilter.value = '';
+  showingFavs = false;
+  const favBtn = document.getElementById('favFilterBtn');
+  if (favBtn) { favBtn.textContent = '🤍 Favoritos'; favBtn.classList.remove('active-fav'); }
+  _showProsSections();
+}
+
+function filterSpec(spec) {
+  const specFilter = document.getElementById('prosSpecFilter');
+  if (specFilter) specFilter.value = spec;
+  _hideProsSections();
+  searchProsList();
+  const sec = document.getElementById('profissionais');
+  if (sec) sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
 
 function quickBook(nm, spec, proData) {
   if (!reqLogin()) return;
