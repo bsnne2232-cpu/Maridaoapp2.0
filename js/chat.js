@@ -144,12 +144,20 @@ function renderChatSnapshot(snap) {
     if (d.sender === 'sys') cls = 'sys';
     else if (d.sender === 'user') cls = 'sent';
     else cls = 'recv'; // pro
-    // Rastreia último preço mencionado pelo profissional
+    // Detecta proposta do profissional e mostra botão de aceite
     if (d.sender === 'pro' && !chatSt.agreed) {
-      const pm = d.text.match(/(\d{2,})/);
-      if (pm) {
-        _lastProPrice = parseInt(pm[1]);
-        showQuickAccept(_lastProPrice);
+      // Prioridade 1: formato da proposta formal "💰 Proposta: R$ X,00"
+      const formalMatch = d.text.match(/Proposta[:\s]+R?\$?\s*(\d+)/i);
+      // Prioridade 2: "R$ X" ou "X reais"
+      const priceMatch = d.text.match(/R\$\s*(\d+)|(\d+)\s*reais/i);
+      // Prioridade 3: qualquer número >= 10
+      const anyNum = d.text.match(/\b(\d{2,})\b/);
+      const proPrice = formalMatch ? parseInt(formalMatch[1])
+        : priceMatch ? parseInt(priceMatch[1] || priceMatch[2])
+        : anyNum ? parseInt(anyNum[1]) : 0;
+      if (proPrice >= 10) {
+        _lastProPrice = proPrice;
+        showQuickAccept(proPrice);
       }
     }
     addMsg(d.text, cls);
@@ -162,15 +170,37 @@ function showQuickAccept(price) {
   const qa = document.getElementById('chatQuickAccept');
   if (!qa) return;
   qa.style.display = 'block';
-  qa.innerHTML = '<button onclick="quickAcceptPrice(' + price + ')" style="width:100%;padding:10px;background:linear-gradient(135deg,#10B981,#059669);color:#fff;border:none;border-radius:var(--rs);font-weight:700;cursor:pointer;font-size:.9rem">✅ Aceitar R$ ' + price + ',00 e pagar</button>';
+  qa.innerHTML = '<button onclick="quickAcceptPrice(' + price + ')" style="width:100%;padding:12px;background:linear-gradient(135deg,#10B981,#059669);color:#fff;border:none;border-radius:var(--rs);font-weight:700;cursor:pointer;font-size:1rem;letter-spacing:.3px">✅ Aceitar R$ ' + price + ',00 e ir para pagamento</button>';
 }
 
+// Aceita a proposta DIRETAMENTE — sem depender de parsing de texto em sendMsg()
 function quickAcceptPrice(price) {
-  if (chatSt.agreed) return;
-  // Simula envio da mensagem de aceite pelo cliente
-  const inp = document.getElementById('chatIn');
-  if (inp) inp.value = 'aceito R$ ' + price;
-  sendMsg();
+  if (chatSt.agreed || !window.currentBookingId || !CU) return;
+  chatSt.agreed = true; chatSt.price = price; agreedPrice = price;
+
+  // Esconde botão e mostra pagamento imediatamente
+  const qa = document.getElementById('chatQuickAccept');
+  if (qa) qa.style.display = 'none';
+  document.getElementById('chatPay').classList.add('show');
+  document.getElementById('cpPrice').textContent = 'R$ ' + price + ',00';
+
+  // Confirma no chat com mensagem do cliente
+  const confirmMsg = '✅ Aceito! Combinamos R$ ' + price + ',00.';
+  const seq = Date.now();
+  _pendingSeqs.add(seq);
+  addMsg(confirmMsg, 'sent');
+  db.collection('messages').add({
+    bookingId: window.currentBookingId, text: confirmMsg,
+    sender: 'user', userId: CU.uid, seq: seq,
+    at: firebase.firestore.FieldValue.serverTimestamp()
+  }).catch(() => {});
+
+  // Salva acordo no booking (cliente tem permissão pois é o dono do documento)
+  db.collection('bookings').doc(window.currentBookingId).update({
+    agreedPrice: price,
+    status: 'payment_pending',
+    priceAgreedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).catch(e => console.error('quickAcceptPrice update:', e));
 }
 
 // === ADD MESSAGE TO DOM ===
@@ -207,35 +237,15 @@ function sendMsg() {
   }).catch(e => { console.error('sendMsg error:', e); _pendingSeqs.delete(seq); });
   chatSt.msgs++;
 
-  // Detect price agreement — aceita número na mensagem OU preço que o pro mencionou
-  const lo = msg.toLowerCase();
-  const pm = msg.match(/(\d{2,})/);
-  const prFromMsg = pm ? parseInt(pm[1]) : 0;
-  const prFromPro = _lastProPrice;
-  const hasAgreementWord = /\b(topo|fechado?|fechar|ok|combinado|aceito|fecha|bora|sim|concordo|beleza|blz|topei|reais|r\$|certo|claro|pode|perfeito|ótimo|otimo|valeu|firmeza|embora|vai)\b/i.test(lo);
-  const pr = prFromMsg >= 20 ? prFromMsg : (hasAgreementWord && prFromPro >= 20 ? prFromPro : 0);
-  if (pr >= 20 && !chatSt.agreed && hasAgreementWord) {
-    chatSt.agreed = true; chatSt.price = pr; agreedPrice = pr;
-    const summaryTxt = '✅ Valor combinado: R$ ' + pr + ',00\n\nPagamento disponível abaixo 👇';
-    // Save as sys message so both sides see it
-    db.collection('messages').add({
-      bookingId: window.currentBookingId,
-      text: summaryTxt,
-      sender: 'sys',
-      userId: CU.uid,
-      seq: Date.now() + 1,
-      at: firebase.firestore.FieldValue.serverTimestamp()
-    }).catch(() => {});
-    // Update booking with agreed price
-    db.collection('bookings').doc(window.currentBookingId).update({
-      agreedPrice: pr,
-      priceAgreedAt: firebase.firestore.FieldValue.serverTimestamp()
-    }).catch(() => {});
-    // Esconde botão rápido e mostra pagamento
-    const qa = document.getElementById('chatQuickAccept');
-    if (qa) qa.style.display = 'none';
-    document.getElementById('chatPay').classList.add('show');
-    document.getElementById('cpPrice').textContent = 'R$ ' + pr + ',00';
+  // Fallback: se usuário digitou "aceito" manualmente e já há um preço do pro → aceita
+  if (!chatSt.agreed && _lastProPrice >= 10) {
+    const lo = msg.toLowerCase();
+    if (/\b(aceito|topo|fechado?|combinado|ok|pode|sim|blz|beleza)\b/i.test(lo)) {
+      // Extrai número da mensagem ou usa o último preço do pro
+      const pm = msg.match(/\b(\d{2,})\b/);
+      const pr = pm ? parseInt(pm[1]) : _lastProPrice;
+      if (pr >= 10) quickAcceptPrice(pr);
+    }
   }
 }
 
