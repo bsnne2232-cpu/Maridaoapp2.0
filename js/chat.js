@@ -185,7 +185,7 @@ function sendMsg() {
   const pr = prFromMsg >= 20 ? prFromMsg : (hasAgreementWord && prFromPro >= 20 ? prFromPro : 0);
   if (pr >= 20 && !chatSt.agreed && hasAgreementWord) {
     chatSt.agreed = true; chatSt.price = pr; agreedPrice = pr;
-    const summaryTxt = '📋 Valor combinado: R$ ' + pr + '\n• Comissão plataforma (25%): R$ ' + (pr * .25).toFixed(0) + '\n• Profissional recebe: R$ ' + (pr * .75).toFixed(0) + '\n\nPode pagar abaixo!';
+    const summaryTxt = '✅ Valor combinado: R$ ' + pr + ',00\n\nPagamento disponível abaixo 👇';
     // Save as sys message so both sides see it
     db.collection('messages').add({
       bookingId: window.currentBookingId,

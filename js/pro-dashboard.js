@@ -808,7 +808,7 @@ function sendProProposal() {
   const val = parseFloat(valEl.value);
   if (!val || val < 10 || val > 10000) { toast('Valor inválido (entre R$ 10 e R$ 10.000)', 'err'); return; }
   const proReceives = (val * 0.75).toFixed(0);
-  const msg = '💰 Proposta: R$ ' + val.toFixed(0) + ',00\n• Você paga: R$ ' + val.toFixed(0) + '\n• Eu recebo: R$ ' + proReceives + ' (após taxa 25%)\n\nResponda "aceito" para confirmar!';
+  const msg = '💰 Proposta: R$ ' + val.toFixed(0) + ',00\n\nResponda "aceito" para confirmar!';
   db.collection('messages').add({
     bookingId: _proChatBookingId,
     text: msg,
@@ -820,5 +820,5 @@ function sendProProposal() {
   }).catch(e => console.error('sendProProposal error:', e));
   valEl.value = '';
   document.getElementById('proProposeArea').style.display = 'none';
-  toast('Proposta enviada! 💰', 'ok');
+  toast('Proposta de R$ ' + val.toFixed(0) + ' enviada! Você recebe R$ ' + proReceives + ' (75%) 💰', 'ok');
 }
