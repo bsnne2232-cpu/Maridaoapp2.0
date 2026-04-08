@@ -317,7 +317,7 @@ async function showMyBookings() {
   try {
     const snap = await db.collection('bookings')
       .where('userId', '==', CU.uid)
-      .limit(20)
+      .limit(50)
       .get();
 
     if (snap.empty) {
@@ -334,13 +334,14 @@ async function showMyBookings() {
       return tb - ta;
     });
 
-    // Filtra: remove recusados e chats sem acordo > 7 dias
+    // Filtra: remove recusados e chats sem acordo com mais de 4 horas
     const filtered = docs.filter(bk => {
       if (bk.declinedBy && bk.declinedBy.length > 0) return false;
       if (bk.agreedPrice) return true;
       if (['accepted', 'payment_pending', 'payment_confirmed', 'completed'].includes(bk.status)) return true;
+      // Chats em aberto: só mostrar se criados há menos de 4 horas
       const ts = bk.createdAt ? bk.createdAt.toMillis() : 0;
-      return Date.now() - ts < 7 * 24 * 60 * 60 * 1000;
+      return Date.now() - ts < 4 * 60 * 60 * 1000;
     });
 
     if (filtered.length === 0) {
