@@ -714,11 +714,13 @@ function cleanupProDashboard() {
 let _proChatListener = null;
 let _proChatBookingId = null;
 let _proSeenMsgIds = new Set();
+let _proPendingSeqs = new Set(); // renderização otimista do pro
 
 async function openProChat(bookingId) {
   if (!CU || !currentProfessional) return;
   _proChatBookingId = bookingId;
   _proSeenMsgIds = new Set();
+  _proPendingSeqs = new Set();
   if (_proChatListener) { _proChatListener(); _proChatListener = null; }
 
   document.getElementById('proChatMsgs').innerHTML = '';
@@ -756,6 +758,11 @@ async function openProChat(bookingId) {
       docs.forEach(d => {
         if (_proSeenMsgIds.has(d.id)) return;
         _proSeenMsgIds.add(d.id);
+        // Mensagem já renderizada otimisticamente (pro enviou)
+        if (d.sender === 'pro' && d.proId === CU.uid && _proPendingSeqs.has(d.seq)) {
+          _proPendingSeqs.delete(d.seq);
+          return;
+        }
         let cls;
         if (d.sender === 'sys') cls = 'sys';
         else if (d.sender === 'pro') cls = 'sent';
@@ -766,39 +773,53 @@ async function openProChat(bookingId) {
         m.appendChild(div);
       });
       m.scrollTop = m.scrollHeight;
-    }, err => console.error('pro chat listener:', err));
+    }, err => {
+      console.error('pro chat listener:', err);
+      if (err.code === 'permission-denied') {
+        const m = document.getElementById('proChatMsgs');
+        if (m) { const blk = document.createElement('div'); blk.className = 'cmsg blk'; blk.textContent = '⚠️ Sem permissão para acessar mensagens.'; m.appendChild(blk); }
+      }
+    });
 }
 
 function closeProChat() {
   if (_proChatListener) { _proChatListener(); _proChatListener = null; }
   _proChatBookingId = null;
   _proSeenMsgIds = new Set();
+  _proPendingSeqs = new Set();
   closeM('proChatM');
+}
+
+// Adiciona mensagem ao DOM do pro chat
+function _proAddMsg(text, cls) {
+  const m = document.getElementById('proChatMsgs');
+  if (!m) return;
+  const div = document.createElement('div');
+  div.className = 'cmsg ' + cls;
+  div.textContent = text;
+  m.appendChild(div);
+  m.scrollTop = m.scrollHeight;
 }
 
 function sendProMsg() {
   const inp = document.getElementById('proChatIn'), msg = inp.value.trim();
   if (!msg || !_proChatBookingId || !CU || !currentProfessional) return;
   inp.value = '';
-  // Block external contacts (reuse global BLOCK from chat.js)
-  if (typeof BLOCK !== 'undefined' && BLOCK.some(p => p.test(msg))) {
-    const m = document.getElementById('proChatMsgs');
-    const blk = document.createElement('div');
-    blk.className = 'cmsg blk';
-    blk.textContent = '⛔ Contato externo bloqueado';
-    m.appendChild(blk);
-    m.scrollTop = m.scrollHeight;
-    return;
-  }
+  // Block external contacts
+  if (typeof BLOCK !== 'undefined' && BLOCK.some(p => p.test(msg))) { _proAddMsg('⛔ Contato externo bloqueado', 'blk'); return; }
+  // Renderização otimista: exibe imediatamente
+  const seq = Date.now();
+  _proPendingSeqs.add(seq);
+  _proAddMsg(msg, 'sent');
   db.collection('messages').add({
     bookingId: _proChatBookingId,
     text: msg,
     sender: 'pro',
     proName: currentProfessional.name,
     proId: CU.uid,
-    seq: Date.now(),
+    seq: seq,
     at: firebase.firestore.FieldValue.serverTimestamp()
-  }).catch(e => console.error('sendProMsg error:', e));
+  }).catch(e => { console.error('sendProMsg error:', e); _proPendingSeqs.delete(seq); });
 }
 
 // === PROPOSTA DE VALOR (pro → cliente) ===
@@ -809,15 +830,19 @@ function sendProProposal() {
   if (!val || val < 10 || val > 10000) { toast('Valor inválido (entre R$ 10 e R$ 10.000)', 'err'); return; }
   const proReceives = (val * 0.75).toFixed(0);
   const msg = '💰 Proposta: R$ ' + val.toFixed(0) + ',00\n\nResponda "aceito" para confirmar!';
+  // Renderização otimista
+  const seq = Date.now();
+  _proPendingSeqs.add(seq);
+  _proAddMsg(msg, 'sent');
   db.collection('messages').add({
     bookingId: _proChatBookingId,
     text: msg,
     sender: 'pro',
     proName: currentProfessional.name,
     proId: CU.uid,
-    seq: Date.now(),
+    seq: seq,
     at: firebase.firestore.FieldValue.serverTimestamp()
-  }).catch(e => console.error('sendProProposal error:', e));
+  }).catch(e => { console.error('sendProProposal error:', e); _proPendingSeqs.delete(seq); });
   valEl.value = '';
   document.getElementById('proProposeArea').style.display = 'none';
   toast('Proposta de R$ ' + val.toFixed(0) + ' enviada! Você recebe R$ ' + proReceives + ' (75%) 💰', 'ok');
