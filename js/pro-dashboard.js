@@ -780,13 +780,14 @@ async function openProChat(bookingId) {
             if (clientPrice >= 10) {
               const acceptArea = document.getElementById('proClientProposalAccept');
               if (acceptArea) {
+                acceptArea.className = 'chat-offer-bar';
                 acceptArea.style.display = 'block';
                 acceptArea.innerHTML =
-                  '<div style="font-size:.82rem;font-weight:700;color:var(--p);margin-bottom:8px">💰 Cliente propõe: R$ ' + clientPrice + ',00</div>' +
-                  '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
-                    '<button onclick="proAcceptClientProposal(' + clientPrice + ')" style="flex:1;min-width:110px;padding:10px 8px;background:linear-gradient(135deg,#10B981,#059669);color:#fff;border:none;border-radius:var(--rs);font-weight:700;cursor:pointer;font-size:.85rem">✅ Aceitar</button>' +
-                    '<button onclick="proCounterProposal(' + clientPrice + ')" style="flex:1;min-width:110px;padding:10px 8px;background:var(--p);color:#fff;border:none;border-radius:var(--rs);font-weight:700;cursor:pointer;font-size:.85rem">💬 Contrapropor</button>' +
-                    '<button onclick="proRejectClientProposal(' + clientPrice + ')" style="flex:1;min-width:90px;padding:10px 8px;background:var(--bg2);color:#EF4444;border:1px solid #EF4444;border-radius:var(--rs);font-weight:700;cursor:pointer;font-size:.85rem">❌ Recusar</button>' +
+                  '<div class="chat-offer-label">💰 Cliente propõe: R$\u00a0' + clientPrice + ',00</div>' +
+                  '<div class="chat-offer-btns">' +
+                    '<button class="chat-offer-btn accept" onclick="proAcceptClientProposal(' + clientPrice + ')">✅ Aceitar</button>' +
+                    '<button class="chat-offer-btn counter" onclick="proCounterProposal(' + clientPrice + ')">💬 Contrapropor</button>' +
+                    '<button class="chat-offer-btn reject" onclick="proRejectClientProposal(' + clientPrice + ')">❌ Recusar</button>' +
                   '</div>';
               }
             }

@@ -169,13 +169,14 @@ function showQuickAccept(price) {
   if (chatSt.agreed) return;
   const qa = document.getElementById('chatQuickAccept');
   if (!qa) return;
+  qa.className = 'chat-offer-bar';
   qa.style.display = 'block';
   qa.innerHTML =
-    '<div style="font-size:.82rem;font-weight:700;color:var(--p);margin-bottom:8px">💰 Proposta recebida: R$ ' + price + ',00</div>' +
-    '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
-      '<button onclick="quickAcceptPrice(' + price + ')" style="flex:1;min-width:110px;padding:10px 8px;background:linear-gradient(135deg,#10B981,#059669);color:#fff;border:none;border-radius:var(--rs);font-weight:700;cursor:pointer;font-size:.85rem">✅ Aceitar</button>' +
-      '<button onclick="clientCounterProposal(' + price + ')" style="flex:1;min-width:110px;padding:10px 8px;background:var(--p);color:#fff;border:none;border-radius:var(--rs);font-weight:700;cursor:pointer;font-size:.85rem">💬 Contrapropor</button>' +
-      '<button onclick="clientRejectProposal(' + price + ')" style="flex:1;min-width:90px;padding:10px 8px;background:var(--bg2);color:#EF4444;border:1px solid #EF4444;border-radius:var(--rs);font-weight:700;cursor:pointer;font-size:.85rem">❌ Recusar</button>' +
+    '<div class="chat-offer-label">💰 Proposta recebida: R$\u00a0' + price + ',00</div>' +
+    '<div class="chat-offer-btns">' +
+      '<button class="chat-offer-btn accept" onclick="quickAcceptPrice(' + price + ')">✅ Aceitar</button>' +
+      '<button class="chat-offer-btn counter" onclick="clientCounterProposal(' + price + ')">💬 Contrapropor</button>' +
+      '<button class="chat-offer-btn reject" onclick="clientRejectProposal(' + price + ')">❌ Recusar</button>' +
     '</div>';
 }
 

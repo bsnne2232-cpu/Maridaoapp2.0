@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="X-Content-Type-Options" content="nosniff">
 <meta name="referrer" content="strict-origin-when-cross-origin">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://*.firebaseio.com https://*.googleapis.com https://maridaoapi.bsnne2232.workers.dev https://viacep.com.br; img-src 'self' data: https:; frame-src https://accounts.google.com; object-src 'none'">
+<meta name="description" content="Maridão App — Contrate profissionais verificados para serviços domésticos. Rápido, seguro e sem complicação.">
 <title>Maridão App — Serviços na sua porta</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -21,13 +23,13 @@
 <nav id="navbar">
 <a href="#" class="logo">Maridão <span>App</span></a>
 <div class="nav-links">
-<a href="#categorias">Serviços</a><a href="#como-funciona">Como funciona</a><a href="#profissionais">Profissionais</a><a href="#avaliacoes">Avaliações</a><a href="trabalhe.html" class="hl">Trabalhe conosco</a>
+<a href="#categorias">Serviços</a><a href="#como-funciona">Como funciona</a><a href="#profissionais">Profissionais</a><a href="#avaliacoes">Avaliações</a><a href="trabalhe.html" class="hl" rel="noopener">Trabalhe conosco</a>
 </div>
 <div class="nav-right">
-<button class="theme-btn" id="themeBtn" onclick="toggleTheme()">🌙</button>
+<button class="theme-btn" id="themeBtn" onclick="toggleTheme()" aria-label="Alternar tema claro/escuro">🌙</button>
 <div id="authBtns">
-<button class="btn btn-ghost" onclick="openM('loginM')">Entrar</button>
-<button class="btn btn-primary" onclick="openM('signupM')">Começar grátis</button>
+<button class="btn btn-ghost" onclick="openM('loginM')" aria-label="Fazer login na conta">Entrar</button>
+<button class="btn btn-primary" onclick="openM('signupM')" aria-label="Criar conta gratuita">Começar grátis</button>
 </div>
 <div class="user-area" id="userArea">
 <div class="avatar" id="userAv" onclick="document.getElementById('userDd').classList.toggle('show')">B</div>
@@ -98,7 +100,13 @@
   <button class="btn btn-primary" onclick="searchProsList()">🔍 Buscar</button>
   <button class="btn btn-ghost fav-filter-btn" id="favFilterBtn" onclick="toggleFavFilter()">🤍 Favoritos</button>
 </div>
-<div id="prosLoading" style="display:none;text-align:center;padding:30px;color:var(--text2)">🔍 Buscando profissionais...</div>
+<div id="prosLoading" style="display:none">
+  <div class="pros-grid">
+    <div class="sk-card"><div class="sk-hdr"><div class="sk sk-av"></div><div style="flex:1"><div class="sk sk-line" style="width:70%"></div><div class="sk sk-line w40"></div></div></div><div class="sk sk-line w80"></div><div class="sk sk-line w60"></div><div class="sk sk-btn"></div></div>
+    <div class="sk-card"><div class="sk-hdr"><div class="sk sk-av"></div><div style="flex:1"><div class="sk sk-line" style="width:70%"></div><div class="sk sk-line w40"></div></div></div><div class="sk sk-line w80"></div><div class="sk sk-line w60"></div><div class="sk sk-btn"></div></div>
+    <div class="sk-card"><div class="sk-hdr"><div class="sk sk-av"></div><div style="flex:1"><div class="sk sk-line" style="width:70%"></div><div class="sk sk-line w40"></div></div></div><div class="sk sk-line w80"></div><div class="sk sk-line w60"></div><div class="sk sk-btn"></div></div>
+  </div>
+</div>
 <div id="prosEmpty" style="display:none;text-align:center;padding:48px;color:var(--text2)">
   <div style="font-size:3rem;margin-bottom:12px">😔</div>
   <p id="prosEmptyMsg">Nenhum profissional encontrado.</p>
@@ -342,8 +350,8 @@
 <h3>Bem-vindo de volta 👋</h3><p class="msub">Entre para acessar sua conta.</p>
 <button class="btn-google" onclick="googleLogin()"><svg width="18" height="18" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg> Entrar com Google</button>
 <div class="divider">ou</div>
-<div class="fg"><label>E-mail</label><input type="email" id="logEmail" placeholder="seu@email.com"><div class="ferr" id="logEmailErr"></div></div>
-<div class="fg"><label>Senha</label><input type="password" id="logPass" placeholder="Sua senha"><div class="ferr" id="logPassErr"></div></div>
+<div class="fg"><label for="logEmail">E-mail</label><input type="email" id="logEmail" placeholder="seu@email.com" autocomplete="email" aria-describedby="logEmailErr"><div class="ferr" id="logEmailErr" role="alert"></div></div>
+<div class="fg"><label for="logPass">Senha</label><input type="password" id="logPass" placeholder="Sua senha" autocomplete="current-password" aria-describedby="logPassErr"><div class="ferr" id="logPassErr" role="alert"></div></div>
 <button class="btn-primary btn-full" id="logBtn" onclick="emailLogin()">Entrar →</button>
 <div class="switch">Não tem conta? <a onclick="closeM('loginM');openM('signupM')">Cadastre-se grátis</a></div>
 </div></div>
@@ -355,10 +363,10 @@
 <h3>Criar sua conta 🚀</h3><p class="msub">Grátis e sem complicação.</p>
 <button class="btn-google" onclick="googleLogin()"><svg width="18" height="18" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg> Cadastrar com Google</button>
 <div class="divider">ou</div>
-<div class="fg"><label>Nome completo *</label><input type="text" id="sName" placeholder="Seu nome"></div>
-<div class="fg"><label>E-mail *</label><input type="email" id="sEmail" placeholder="seu@email.com"><div class="ferr" id="sEmailErr"></div></div>
-<div class="fg"><label>CPF *</label><input type="text" id="sCPF" placeholder="000.000.000-00" maxlength="14"></div>
-<div class="fg"><label>Senha *</label><input type="password" id="sPass" placeholder="Mín. 8 chars, maiúscula, número e especial"><div class="ferr" id="sPassErr"></div></div>
+<div class="fg"><label for="sName">Nome completo *</label><input type="text" id="sName" placeholder="Seu nome" autocomplete="name"></div>
+<div class="fg"><label for="sEmail">E-mail *</label><input type="email" id="sEmail" placeholder="seu@email.com" autocomplete="email" aria-describedby="sEmailErr"><div class="ferr" id="sEmailErr" role="alert"></div></div>
+<div class="fg"><label for="sCPF">CPF *</label><input type="text" id="sCPF" placeholder="000.000.000-00" maxlength="14" inputmode="numeric" autocomplete="off"></div>
+<div class="fg"><label for="sPass">Senha *</label><input type="password" id="sPass" placeholder="Mín. 8 caracteres, maiúscula, número e símbolo" autocomplete="new-password" aria-describedby="sPassErr"><div class="ferr" id="sPassErr" role="alert"></div></div>
 <button class="btn-primary btn-full" onclick="signupStep2()">Criar conta grátis →</button>
 <div class="switch">Já tem conta? <a onclick="closeM('signupM');openM('loginM')">Faça login</a></div>
 </div>
@@ -483,7 +491,7 @@ Cancelamentos em cima da hora podem resultar em avaliação negativa e suspensã
 <div class="chat-hdr">
 <div class="chat-av" id="chatAv">🔧</div>
 <div><div class="chat-nm" id="chatNm">Profissional</div><div class="chat-st">Online agora</div></div>
-<button class="md-close" onclick="closeM('chatM')" style="position:static;background:none;color:var(--text2)">✕</button>
+<button class="md-close" onclick="closeM('chatM')" style="position:static;background:none;color:var(--text2)" aria-label="Fechar chat">✕</button>
 </div>
 <div class="chat-sec">🔒 Contatos externos bloqueados. Combine tudo aqui e pague pelo app!</div>
 <div class="chat-msgs" id="chatMsgs"></div>
@@ -513,7 +521,7 @@ Cancelamentos em cima da hora podem resultar em avaliação negativa e suspensã
   <div id="proChatSvc" style="font-size:.72rem;color:var(--text2);font-weight:600"></div>
   <div id="proChatAddr" style="font-size:.72rem;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
 </div>
-<button class="md-close" onclick="closeProChat()" style="position:static;background:none;color:var(--text2)">✕</button>
+<button class="md-close" onclick="closeProChat()" style="position:static;background:none;color:var(--text2)" aria-label="Fechar chat">✕</button>
 </div>
 <div class="chat-sec">🔒 Combine tudo aqui. Após acordo, o cliente paga pelo app (Mercado Pago, taxa 25%).</div>
 <div class="chat-msgs" id="proChatMsgs"></div>
