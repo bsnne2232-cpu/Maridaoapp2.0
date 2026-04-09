@@ -771,6 +771,21 @@ async function openProChat(bookingId) {
         div.className = 'cmsg ' + cls;
         div.textContent = d.text;
         m.appendChild(div);
+
+        // Detecta proposta do CLIENTE → mostra botão de aceitar para o pro
+        if (d.sender === 'user') {
+          const fm = d.text.match(/Proponho[:\s]+R?\$?\s*(\d+)/i) || d.text.match(/R\$\s*(\d+)/i);
+          if (fm) {
+            const clientPrice = parseInt(fm[1]);
+            if (clientPrice >= 10) {
+              const acceptArea = document.getElementById('proClientProposalAccept');
+              if (acceptArea) {
+                acceptArea.style.display = 'block';
+                acceptArea.innerHTML = '<button onclick="proAcceptClientProposal(' + clientPrice + ')" style="width:100%;padding:10px;background:linear-gradient(135deg,#10B981,#059669);color:#fff;border:none;border-radius:var(--rs);font-weight:700;cursor:pointer;font-size:.9rem">✅ Aceitar proposta do cliente: R$ ' + clientPrice + ',00</button>';
+              }
+            }
+          }
+        }
       });
       m.scrollTop = m.scrollHeight;
     }, err => {
@@ -787,6 +802,8 @@ function closeProChat() {
   _proChatBookingId = null;
   _proSeenMsgIds = new Set();
   _proPendingSeqs = new Set();
+  const acceptArea = document.getElementById('proClientProposalAccept');
+  if (acceptArea) { acceptArea.style.display = 'none'; acceptArea.innerHTML = ''; }
   closeM('proChatM');
 }
 
@@ -820,6 +837,28 @@ function sendProMsg() {
     seq: seq,
     at: firebase.firestore.FieldValue.serverTimestamp()
   }).catch(e => { console.error('sendProMsg error:', e); _proPendingSeqs.delete(seq); });
+}
+
+// === PRO ACEITA PROPOSTA DO CLIENTE ===
+function proAcceptClientProposal(price) {
+  if (!_proChatBookingId || !CU || !currentProfessional) return;
+  const msg = '✅ Aceito sua proposta de R$ ' + price + ',00! Pode pagar pelo app.';
+  const seq = Date.now();
+  _proPendingSeqs.add(seq);
+  _proAddMsg(msg, 'sent');
+  db.collection('messages').add({
+    bookingId: _proChatBookingId, text: msg,
+    sender: 'pro', proName: currentProfessional.name, proId: CU.uid,
+    seq: seq,
+    at: firebase.firestore.FieldValue.serverTimestamp()
+  }).catch(e => { _proPendingSeqs.delete(seq); });
+  // Atualiza lastProPosal para disparar o _bookingListener do cliente
+  db.collection('bookings').doc(_proChatBookingId).update({
+    lastProPosal: price
+  }).catch(() => {});
+  const acceptArea = document.getElementById('proClientProposalAccept');
+  if (acceptArea) acceptArea.style.display = 'none';
+  toast('Aceite enviado! Aguardando pagamento do cliente 💰', 'ok');
 }
 
 // === PROPOSTA DE VALOR (pro → cliente) ===

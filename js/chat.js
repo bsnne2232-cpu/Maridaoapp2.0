@@ -178,9 +178,11 @@ function quickAcceptPrice(price) {
   if (chatSt.agreed || !window.currentBookingId || !CU) return;
   chatSt.agreed = true; chatSt.price = price; agreedPrice = price;
 
-  // Esconde botão e mostra pagamento imediatamente
+  // Esconde áreas de negociação e mostra pagamento imediatamente
   const qa = document.getElementById('chatQuickAccept');
   if (qa) qa.style.display = 'none';
+  const pa = document.getElementById('chatClientProposeArea');
+  if (pa) pa.style.display = 'none';
   document.getElementById('chatPay').classList.add('show');
   document.getElementById('cpPrice').textContent = 'R$ ' + price + ',00';
 
@@ -201,6 +203,26 @@ function quickAcceptPrice(price) {
     status: 'payment_pending',
     priceAgreedAt: firebase.firestore.FieldValue.serverTimestamp()
   }).catch(e => console.error('quickAcceptPrice update:', e));
+}
+
+// === PROPOSTA DO CLIENTE ===
+function clientProposePrice() {
+  if (!window.currentBookingId || !CU) return;
+  const valEl = document.getElementById('clientProposeVal');
+  const val = parseFloat(valEl.value);
+  if (!val || val < 10 || val > 10000) { toast('Valor inválido (entre R$ 10 e R$ 10.000)', 'err'); return; }
+  const msg = '💰 Proponho: R$ ' + Math.round(val) + ',00';
+  const seq = Date.now();
+  _pendingSeqs.add(seq);
+  addMsg(msg, 'sent');
+  db.collection('messages').add({
+    bookingId: window.currentBookingId, text: msg,
+    sender: 'user', userId: CU.uid, seq: seq,
+    at: firebase.firestore.FieldValue.serverTimestamp()
+  }).catch(e => { console.error('clientProposePrice:', e); _pendingSeqs.delete(seq); });
+  valEl.value = '';
+  document.getElementById('chatClientProposeArea').style.display = 'none';
+  toast('Proposta de R$ ' + Math.round(val) + ' enviada!', 'ok');
 }
 
 // === ADD MESSAGE TO DOM ===
