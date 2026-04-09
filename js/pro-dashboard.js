@@ -772,7 +772,7 @@ async function openProChat(bookingId) {
         div.textContent = d.text;
         m.appendChild(div);
 
-        // Detecta proposta do CLIENTE → mostra botão de aceitar para o pro
+        // Detecta proposta do CLIENTE → mostra botões de aceitar/contrapropor/recusar para o pro
         if (d.sender === 'user') {
           const fm = d.text.match(/Proponho[:\s]+R?\$?\s*(\d+)/i) || d.text.match(/R\$\s*(\d+)/i);
           if (fm) {
@@ -781,7 +781,13 @@ async function openProChat(bookingId) {
               const acceptArea = document.getElementById('proClientProposalAccept');
               if (acceptArea) {
                 acceptArea.style.display = 'block';
-                acceptArea.innerHTML = '<button onclick="proAcceptClientProposal(' + clientPrice + ')" style="width:100%;padding:10px;background:linear-gradient(135deg,#10B981,#059669);color:#fff;border:none;border-radius:var(--rs);font-weight:700;cursor:pointer;font-size:.9rem">✅ Aceitar proposta do cliente: R$ ' + clientPrice + ',00</button>';
+                acceptArea.innerHTML =
+                  '<div style="font-size:.82rem;font-weight:700;color:var(--p);margin-bottom:8px">💰 Cliente propõe: R$ ' + clientPrice + ',00</div>' +
+                  '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+                    '<button onclick="proAcceptClientProposal(' + clientPrice + ')" style="flex:1;min-width:110px;padding:10px 8px;background:linear-gradient(135deg,#10B981,#059669);color:#fff;border:none;border-radius:var(--rs);font-weight:700;cursor:pointer;font-size:.85rem">✅ Aceitar</button>' +
+                    '<button onclick="proCounterProposal(' + clientPrice + ')" style="flex:1;min-width:110px;padding:10px 8px;background:var(--p);color:#fff;border:none;border-radius:var(--rs);font-weight:700;cursor:pointer;font-size:.85rem">💬 Contrapropor</button>' +
+                    '<button onclick="proRejectClientProposal(' + clientPrice + ')" style="flex:1;min-width:90px;padding:10px 8px;background:var(--bg2);color:#EF4444;border:1px solid #EF4444;border-radius:var(--rs);font-weight:700;cursor:pointer;font-size:.85rem">❌ Recusar</button>' +
+                  '</div>';
               }
             }
           }
@@ -837,6 +843,34 @@ function sendProMsg() {
     seq: seq,
     at: firebase.firestore.FieldValue.serverTimestamp()
   }).catch(e => { console.error('sendProMsg error:', e); _proPendingSeqs.delete(seq); });
+}
+
+// === PRO RECUSA PROPOSTA DO CLIENTE ===
+function proRejectClientProposal(price) {
+  if (!_proChatBookingId || !CU || !currentProfessional) return;
+  const acceptArea = document.getElementById('proClientProposalAccept');
+  if (acceptArea) acceptArea.style.display = 'none';
+  const msg = '❌ Não consigo aceitar R$ ' + price + ',00. Posso propor um valor diferente?';
+  const seq = Date.now();
+  _proPendingSeqs.add(seq);
+  _proAddMsg(msg, 'sent');
+  db.collection('messages').add({
+    bookingId: _proChatBookingId, text: msg,
+    sender: 'pro', proName: currentProfessional.name, proId: CU.uid, seq: seq,
+    at: firebase.firestore.FieldValue.serverTimestamp()
+  }).catch(e => { _proPendingSeqs.delete(seq); });
+}
+
+// === PRO ABRE CONTRAPROPOSTA ===
+function proCounterProposal(price) {
+  const acceptArea = document.getElementById('proClientProposalAccept');
+  if (acceptArea) acceptArea.style.display = 'none';
+  const proposeArea = document.getElementById('proProposeArea');
+  if (proposeArea) {
+    proposeArea.style.display = 'block';
+    const valEl = document.getElementById('proProposeVal');
+    if (valEl) { valEl.value = ''; valEl.focus(); }
+  }
 }
 
 // === PRO ACEITA PROPOSTA DO CLIENTE ===

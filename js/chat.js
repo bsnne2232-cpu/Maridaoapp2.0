@@ -164,13 +164,47 @@ function renderChatSnapshot(snap) {
   });
 }
 
-// === BOTÃO RÁPIDO DE ACEITAR PROPOSTA DO PRO ===
+// === BOTÕES DE AÇÃO PARA PROPOSTA DO PRO (aceitar / contrapropor / recusar) ===
 function showQuickAccept(price) {
   if (chatSt.agreed) return;
   const qa = document.getElementById('chatQuickAccept');
   if (!qa) return;
   qa.style.display = 'block';
-  qa.innerHTML = '<button onclick="quickAcceptPrice(' + price + ')" style="width:100%;padding:12px;background:linear-gradient(135deg,#10B981,#059669);color:#fff;border:none;border-radius:var(--rs);font-weight:700;cursor:pointer;font-size:1rem;letter-spacing:.3px">✅ Aceitar R$ ' + price + ',00 e ir para pagamento</button>';
+  qa.innerHTML =
+    '<div style="font-size:.82rem;font-weight:700;color:var(--p);margin-bottom:8px">💰 Proposta recebida: R$ ' + price + ',00</div>' +
+    '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+      '<button onclick="quickAcceptPrice(' + price + ')" style="flex:1;min-width:110px;padding:10px 8px;background:linear-gradient(135deg,#10B981,#059669);color:#fff;border:none;border-radius:var(--rs);font-weight:700;cursor:pointer;font-size:.85rem">✅ Aceitar</button>' +
+      '<button onclick="clientCounterProposal(' + price + ')" style="flex:1;min-width:110px;padding:10px 8px;background:var(--p);color:#fff;border:none;border-radius:var(--rs);font-weight:700;cursor:pointer;font-size:.85rem">💬 Contrapropor</button>' +
+      '<button onclick="clientRejectProposal(' + price + ')" style="flex:1;min-width:90px;padding:10px 8px;background:var(--bg2);color:#EF4444;border:1px solid #EF4444;border-radius:var(--rs);font-weight:700;cursor:pointer;font-size:.85rem">❌ Recusar</button>' +
+    '</div>';
+}
+
+// === RECUSAR PROPOSTA DO PRO ===
+function clientRejectProposal(price) {
+  if (chatSt.agreed || !window.currentBookingId || !CU) return;
+  const qa = document.getElementById('chatQuickAccept');
+  if (qa) qa.style.display = 'none';
+  const msg = '❌ Não aceito R$ ' + price + ',00. Podemos negociar?';
+  const seq = Date.now();
+  _pendingSeqs.add(seq);
+  addMsg(msg, 'sent');
+  db.collection('messages').add({
+    bookingId: window.currentBookingId, text: msg,
+    sender: 'user', userId: CU.uid, seq: seq,
+    at: firebase.firestore.FieldValue.serverTimestamp()
+  }).catch(() => { _pendingSeqs.delete(seq); });
+}
+
+// === CONTRAPROPOSTA DO CLIENTE ===
+function clientCounterProposal(price) {
+  const qa = document.getElementById('chatQuickAccept');
+  if (qa) qa.style.display = 'none';
+  const proposeArea = document.getElementById('chatClientProposeArea');
+  if (proposeArea) {
+    proposeArea.style.display = 'block';
+    const valEl = document.getElementById('clientProposeVal');
+    if (valEl) { valEl.value = ''; valEl.focus(); }
+  }
 }
 
 // Aceita a proposta DIRETAMENTE — sem depender de parsing de texto em sendMsg()
