@@ -456,6 +456,14 @@ Cancelamentos em cima da hora podem resultar em avaliação negativa e suspensã
 <input type="hidden" id="bkAddr">
 <div class="fr"><div class="fg"><label>Data *</label><input type="date" id="bkDate"></div><div class="fg"><label>Horário *</label><input type="time" id="bkTime"></div></div>
 <div class="fg"><label>Descrição do serviço</label><textarea id="bkDesc" rows="3" placeholder="Descreva o que precisa..."></textarea></div>
+<div class="fg" id="bkBudgetRow">
+  <label>💰 Seu orçamento para este serviço <span style="font-weight:400;color:var(--text2)">(opcional — negociação a cegas)</span></label>
+  <input type="number" id="bkBudget" placeholder="Ex: 180" min="10" max="10000"
+    style="padding:10px 14px;border:1px solid var(--border);border-radius:var(--rs);font-size:.95rem;background:var(--bg);color:var(--text);width:100%"
+    oninput="onBkBudgetInput()">
+  <div id="bkBudgetGauge" style="margin-top:2px"></div>
+  <div style="font-size:.72rem;color:var(--text2);margin-top:4px">🔒 Seu valor só é revelado ao profissional no momento do chat — ele não saberá antes</div>
+</div>
 </div>
 <div id="carretoF" style="display:none">
 <div style="background:var(--pl);border-radius:var(--rs);padding:10px;font-size:.8rem;color:var(--p);margin-bottom:12px;text-align:center">💬 Estimativa — combine o valor final no chat!</div>
@@ -486,6 +494,7 @@ Cancelamentos em cima da hora podem resultar em avaliação negativa e suspensã
 <button class="md-close" onclick="closeM('chatM')" style="position:static;background:none;color:var(--text2)">✕</button>
 </div>
 <div class="chat-sec">🔒 Contatos externos bloqueados. Combine tudo aqui e pague pelo app!</div>
+<div id="chatBlindReveal" style="display:none;padding:10px 14px;border-bottom:2px solid var(--p);background:var(--pl)"></div>
 <div class="chat-msgs" id="chatMsgs"></div>
 <div id="chatQuickAccept" style="display:none;padding:8px 14px;border-top:2px solid var(--p);background:var(--pl)"></div>
 <div id="chatClientProposeArea" style="display:none;padding:8px 14px;border-top:1px solid var(--border);background:var(--bg2)">
@@ -517,6 +526,7 @@ Cancelamentos em cima da hora podem resultar em avaliação negativa e suspensã
 <button class="md-close" onclick="closeProChat()" style="position:static;background:none;color:var(--text2)">✕</button>
 </div>
 <div class="chat-sec">🔒 Combine tudo aqui. Após acordo, o cliente paga pelo app (Mercado Pago, taxa 25%).</div>
+<div id="proBlindReveal" style="display:none;padding:10px 14px;border-bottom:2px solid var(--p);background:var(--pl)"></div>
 <div class="chat-msgs" id="proChatMsgs"></div>
 <div id="proClientProposalAccept" style="display:none;padding:8px 14px;border-top:2px solid var(--p);background:var(--pl)"></div>
 <div id="proProposeArea" style="display:none;padding:8px 14px;border-top:1px solid var(--border);background:var(--bg2)">

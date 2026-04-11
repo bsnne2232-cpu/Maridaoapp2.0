@@ -101,7 +101,7 @@ let _bookingListener = null; // ouve mudanças no documento de booking (proposta
 // === OPEN CHAT (CLIENT SIDE) ===
 async function openChat(p, s) {
   selPro = p; selSvc = s;
-  chatSt = { msgs: 0, details: { what: false, where: false, when: false }, agreed: false, price: 0 };
+  chatSt = { msgs: 0, details: { what: false, where: false, when: false }, agreed: false, price: 0, blindRevealed: false, revealDismissed: false };
   window.currentBookingId = null;
   _seenMsgIds = new Set();
   _pendingSeqs = new Set();
@@ -137,22 +137,34 @@ async function openChat(p, s) {
       addr: addr,
       status: 'chat',
       acceptedByPro: null,
+      clientBudget: bk.budget || null,
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
     window.currentBookingId = ref.id;
 
     // Escuta documento de booking para capturar proposta do profissional em tempo real
+    // e detectar quando o profissional definiu seu preço (negociação a cegas)
     _bookingListener = db.collection('bookings').doc(ref.id).onSnapshot(snap => {
       if (!snap.exists || chatSt.agreed) return;
       const bk = snap.data();
+
+      // === NEGOCIAÇÃO A CEGAS: revela quando ambos definiram preço ===
+      if (bk.clientBudget && bk.proBudget && !chatSt.blindRevealed) {
+        chatSt.blindRevealed = true;
+        showBlindNegoReveal(bk.clientBudget, bk.proBudget, s, 'client');
+      }
+
       if (bk.lastProPosal && bk.lastProPosal !== _lastProPrice) {
         _lastProPrice = bk.lastProPosal;
-        showQuickAccept(_lastProPrice);
+        // Só mostra proposta rápida se reveal já foi dispensado
+        if (chatSt.blindRevealed && chatSt.revealDismissed) showQuickAccept(_lastProPrice);
       }
       if (bk.agreedPrice) {
         chatSt.agreed = true; chatSt.price = bk.agreedPrice; agreedPrice = bk.agreedPrice;
         const qa = document.getElementById('chatQuickAccept');
         if (qa) qa.style.display = 'none';
+        const br = document.getElementById('chatBlindReveal');
+        if (br) br.style.display = 'none';
         document.getElementById('chatPay').classList.add('show');
         document.getElementById('cpPrice').textContent = 'R$ ' + bk.agreedPrice + ',00';
       }
@@ -232,6 +244,133 @@ function renderChatSnapshot(snap) {
     }
     addMsg(d.text, cls);
   });
+}
+
+// ============================================================
+// === NEGOCIAÇÃO A CEGAS — REVEAL DOS DOIS VALORES =========
+// ============================================================
+
+function showBlindNegoReveal(clientBudget, proBudget, svc, side) {
+  const revealId = side === 'client' ? 'chatBlindReveal' : 'proBlindReveal';
+  const el = document.getElementById(revealId);
+  if (!el) return;
+
+  const fair = Math.round((clientBudget + proBudget) / 2);
+  const fairMin = Math.round(fair * 0.92);
+  const fairMax = Math.round(fair * 1.08);
+  const range = SVC_PRICE_RANGE[svc] || { min: 60, fair: 200, max: 1000 };
+
+  // Posição do valor justo no termômetro
+  const pct = Math.min(96, Math.max(4, ((fair - range.min) / (range.max - range.min)) * 100));
+  let fairColor = '#10B981';
+  if (fair < range.min * 0.65) fairColor = '#EF4444';
+  else if (fair < range.min) fairColor = '#F97316';
+  else if (fair > range.max) fairColor = '#8B5CF6';
+  else if (fair > range.fair) fairColor = '#3B82F6';
+
+  const gap = Math.abs(proBudget - clientBudget);
+  const gapPct = Math.round((gap / Math.max(clientBudget, proBudget)) * 100);
+
+  let gapMsg = '';
+  if (gapPct <= 15) gapMsg = '✅ Valores muito próximos! Boa chance de acordo.';
+  else if (gapPct <= 35) gapMsg = '💬 Diferença moderada — o valor justo está no meio.';
+  else gapMsg = '⚠️ Diferença grande — considere o valor justo como ponto de partida.';
+
+  const clientLabel = side === 'client' ? '💰 Você ofereceu' : '💰 Cliente ofereceu';
+  const proLabel    = side === 'client' ? '🔧 Profissional quer' : '🔧 Você quer';
+  const clientVal   = side === 'client' ? clientBudget : clientBudget;
+  const proVal      = side === 'client' ? proBudget    : proBudget;
+
+  const acceptFn   = side === 'client' ? 'acceptFairPrice(' + fair + ')' : 'proAcceptFairReveal(' + fair + ')';
+  const negotiateFn = side === 'client' ? 'negotiateInChat()' : 'proNegotiateInChat()';
+  const rejectFn   = side === 'client' ? 'clientRejectReveal(' + proBudget + ')' : 'proRejectReveal(' + clientBudget + ')';
+
+  el.style.display = 'block';
+  el.innerHTML =
+    '<div style="font-size:.7rem;font-weight:800;color:var(--p);letter-spacing:.8px;margin-bottom:8px">🎭 NEGOCIAÇÃO A CEGAS — REVELAÇÃO</div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">' +
+      '<div style="background:var(--bg);border-radius:var(--rs);padding:10px;text-align:center">' +
+        '<div style="font-size:.68rem;color:var(--text2);margin-bottom:4px">' + clientLabel + '</div>' +
+        '<div style="font-size:1.3rem;font-weight:800;color:var(--p)">R$ ' + clientVal + '</div>' +
+      '</div>' +
+      '<div style="background:var(--bg);border-radius:var(--rs);padding:10px;text-align:center">' +
+        '<div style="font-size:.68rem;color:var(--text2);margin-bottom:4px">' + proLabel + '</div>' +
+        '<div style="font-size:1.3rem;font-weight:800;color:#F97316">R$ ' + proVal + '</div>' +
+      '</div>' +
+    '</div>' +
+    '<div style="background:var(--bg);border-radius:var(--rs);padding:10px;margin-bottom:8px">' +
+      '<div style="font-size:.68rem;color:var(--text2);margin-bottom:4px;text-align:center">⚖️ VALOR JUSTO SUGERIDO</div>' +
+      '<div style="font-size:1.4rem;font-weight:800;color:' + fairColor + ';text-align:center;margin-bottom:8px">' +
+        'R$ ' + fairMin + ' – R$ ' + fairMax +
+      '</div>' +
+      '<div style="display:flex;justify-content:space-between;font-size:.64rem;color:var(--text2);margin-bottom:3px">' +
+        '<span>Muito baixo</span><span>Justo (R$' + range.fair + ')</span><span>Alto</span>' +
+      '</div>' +
+      '<div class="gauge-track">' +
+        '<div class="gauge-fill" style="width:' + pct + '%"></div>' +
+        '<div class="gauge-tip" style="left:' + pct + '%;background:' + fairColor + '"></div>' +
+      '</div>' +
+      '<div style="font-size:.72rem;color:var(--text2);margin-top:6px;text-align:center">' + gapMsg + '</div>' +
+    '</div>' +
+    '<div class="nego-actions">' +
+      '<button class="nego-btn nego-accept" onclick="' + acceptFn + '">✅ Aceitar justo</button>' +
+      '<button class="nego-btn nego-counter" onclick="' + negotiateFn + '">💬 Negociar</button>' +
+      '<button class="nego-btn nego-reject" onclick="' + rejectFn + '">❌ Recusar</button>' +
+    '</div>';
+}
+
+// === CLIENTE ACEITA O VALOR JUSTO ===
+function acceptFairPrice(fair) {
+  if (chatSt.agreed || !window.currentBookingId || !CU) return;
+  chatSt.agreed = true; chatSt.price = fair; agreedPrice = fair;
+  const el = document.getElementById('chatBlindReveal');
+  if (el) el.style.display = 'none';
+  document.getElementById('chatPay').classList.add('show');
+  document.getElementById('cpPrice').textContent = 'R$ ' + fair + ',00';
+  const msg = '✅ Aceito o valor justo de R$ ' + fair + ',00!';
+  const seq = Date.now();
+  _pendingSeqs.add(seq);
+  addMsg(msg, 'sent');
+  db.collection('messages').add({ bookingId: window.currentBookingId, text: msg, sender: 'user', userId: CU.uid, seq, at: firebase.firestore.FieldValue.serverTimestamp() }).catch(() => {});
+  db.collection('bookings').doc(window.currentBookingId).update({ agreedPrice: fair, status: 'payment_pending', priceAgreedAt: firebase.firestore.FieldValue.serverTimestamp() }).catch(() => {});
+}
+
+// === CLIENTE ABRE CHAT NORMAL (dispensar reveal) ===
+function negotiateInChat() {
+  chatSt.revealDismissed = true;
+  const el = document.getElementById('chatBlindReveal');
+  if (el) el.style.display = 'none';
+  toast('Negocie livremente no chat 💬', 'ok');
+}
+
+// === CLIENTE REJEITA — pede mínimo que o pro precisaria receber ===
+function clientRejectReveal(proBudget) {
+  const el = document.getElementById('chatBlindReveal');
+  if (!el) return;
+  chatSt.revealDismissed = true;
+  el.innerHTML =
+    '<div style="font-size:.82rem;font-weight:700;color:var(--text);margin-bottom:8px">❌ A partir de quanto você está disposto a pagar?</div>' +
+    '<div style="display:flex;gap:6px">' +
+      '<input type="number" id="clientRevRejectVal" placeholder="Ex: 200" min="10" max="10000"' +
+        ' style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:var(--rs);font-size:.9rem;background:var(--bg);color:var(--text)">' +
+      '<button onclick="sendClientRevReject(' + proBudget + ')"' +
+        ' style="padding:8px 14px;background:var(--p);color:#fff;border:none;border-radius:var(--rs);font-weight:700;cursor:pointer">Enviar</button>' +
+      '<button onclick="document.getElementById(\'chatBlindReveal\').style.display=\'none\'"' +
+        ' style="padding:8px 10px;background:var(--bg);border:1px solid var(--border);border-radius:var(--rs);cursor:pointer">✕</button>' +
+    '</div>';
+}
+
+function sendClientRevReject(proBudget) {
+  const val = parseFloat(document.getElementById('clientRevRejectVal').value);
+  if (!val || val < 10) { toast('Valor inválido', 'err'); return; }
+  const msg = '❌ Não aceito R$ ' + proBudget + ',00. Estou disposto a pagar a partir de R$ ' + Math.round(val) + ',00.';
+  const seq = Date.now(); _pendingSeqs.add(seq); addMsg(msg, 'sent');
+  db.collection('messages').add({ bookingId: window.currentBookingId, text: msg, sender: 'user', userId: CU.uid, seq, at: firebase.firestore.FieldValue.serverTimestamp() }).catch(() => {});
+  const el = document.getElementById('chatBlindReveal');
+  if (el) el.style.display = 'none';
+  // Abre área de proposta
+  const ca = document.getElementById('chatClientProposeArea');
+  if (ca) { ca.style.display = 'block'; const vi = document.getElementById('clientProposeVal'); if (vi) { vi.value = Math.round(val); onClientPriceInput(); } }
 }
 
 // === CAIXA DE NEGOCIAÇÃO (3 opções) — PROPOSTA DO PRO ===
@@ -445,7 +584,7 @@ async function reopenClientChat(bookingId, proName, proIcon) {
   _seenMsgIds = new Set();
   _pendingSeqs = new Set();
   _lastProPrice = 0;
-  chatSt = { msgs: 0, details: { what: false, where: false, when: false }, agreed: false, price: 0 };
+  chatSt = { msgs: 0, details: { what: false, where: false, when: false }, agreed: false, price: 0, blindRevealed: false, revealDismissed: false };
   if (_chatListener) { _chatListener(); _chatListener = null; }
   if (_bookingListener) { _bookingListener(); _bookingListener = null; }
   window.currentBookingId = bookingId;
@@ -459,11 +598,16 @@ async function reopenClientChat(bookingId, proName, proIcon) {
   closeM('clientChatsM');
   openM('chatM');
 
-  // Verifica se já tinha preço acordado
+  // Verifica estado atual do booking
   try {
     const bkSnap = await db.collection('bookings').doc(bookingId).get();
     if (bkSnap.exists) {
       const bk = bkSnap.data();
+      // Mostra reveal se ambos ainda não chegaram a acordo
+      if (bk.clientBudget && bk.proBudget && !bk.agreedPrice) {
+        chatSt.blindRevealed = true;
+        showBlindNegoReveal(bk.clientBudget, bk.proBudget, bk.service || selSvc, 'client');
+      }
       if (bk.agreedPrice && bk.status !== 'completed') {
         chatSt.agreed = true; chatSt.price = bk.agreedPrice; agreedPrice = bk.agreedPrice;
         document.getElementById('chatPay').classList.add('show');

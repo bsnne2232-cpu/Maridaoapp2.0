@@ -160,16 +160,23 @@ function renderRequestCard(bookingId, booking) {
   const date = esc(booking.details && booking.details.date ? booking.details.date : '—');
   const time = esc(booking.details && booking.details.time ? booking.details.time : '—');
   const desc = booking.details && booking.details.desc ? booking.details.desc.slice(0, 80) : '';
+  const svc = booking.service || '';
 
   const card = document.createElement('div');
   card.className = 'pro-request-card';
   card.id = 'req-' + bookingId;
   const clientName = esc(booking.userName || (booking.userEmail ? booking.userEmail.split('@')[0] : 'Cliente'));
 
+  // Indicador de orçamento do cliente (cego — não revela o valor)
+  const clientHasBudget = !!booking.clientBudget;
+  const budgetHint = clientHasBudget
+    ? '<div style="font-size:.72rem;color:#10B981;margin-top:6px;padding:5px 8px;background:#D1FAE5;border-radius:6px">💡 Cliente já definiu um orçamento — defina seu preço para revelar na negociação</div>'
+    : '';
+
   card.innerHTML =
     '<div style="display:flex;justify-content:space-between;align-items:start;gap:12px">' +
       '<div style="flex:1">' +
-        '<h4 style="margin:0 0 8px 0">' + esc(booking.details && booking.details.svc ? booking.details.svc : (booking.service || 'Serviço')) + '</h4>' +
+        '<h4 style="margin:0 0 8px 0">' + esc(booking.details && booking.details.svc ? booking.details.svc : (svc || 'Serviço')) + '</h4>' +
         '<div class="pro-request-info">' +
           '<div>👤 ' + clientName + '</div>' +
           '<div>📍 ' + addr + '</div>' +
@@ -177,19 +184,58 @@ function renderRequestCard(bookingId, booking) {
           '<div>⏱️ ' + esc(timeStr) + '</div>' +
           (desc ? '<div>📝 "' + esc(desc) + '"</div>' : '') +
         '</div>' +
+        budgetHint +
       '</div>' +
       '<div style="text-align:right;flex-shrink:0">' +
-        '<div style="font-size:.75rem;color:var(--text2);margin-bottom:4px">Estimativa</div>' +
-        '<div style="font-size:1.3rem;font-weight:800;color:var(--p);margin-bottom:12px">R$ ' + esc(String(rate)) + '</div>' +
         '<div style="display:flex;gap:8px;flex-direction:column">' +
-          '<button class="btn-chat" onclick="openProChat(\'' + bookingId + '\')">💬 Conversar</button>' +
           '<button class="btn-accept" onclick="acceptRequest(\'' + bookingId + '\')">✅ Aceitar</button>' +
           '<button class="btn-decline" onclick="declineRequest(\'' + bookingId + '\')">❌ Recusar</button>' +
         '</div>' +
       '</div>' +
+    '</div>' +
+    // === CAMPO DE PREÇO — negociação a cegas ===
+    '<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">' +
+      '<div style="font-size:.78rem;font-weight:700;margin-bottom:6px">💰 Qual o seu preço para este serviço?</div>' +
+      '<div style="font-size:.7rem;color:var(--text2);margin-bottom:8px">🔒 O cliente só verá seu valor quando ambos entrarem no chat</div>' +
+      '<div style="display:flex;gap:6px;align-items:flex-start">' +
+        '<div style="flex:1">' +
+          '<input type="number" id="proBudgetInput-' + bookingId + '" placeholder="Ex: 300" min="10" max="10000"' +
+            ' style="width:100%;padding:8px 12px;border:1.5px solid var(--border);border-radius:var(--rs);font-size:.95rem;background:var(--bg);color:var(--text)"' +
+            ' oninput="onProCardBudgetInput(\'' + bookingId + '\',\'' + esc(svc) + '\')">' +
+          '<div id="proBudgetGauge-' + bookingId + '" style="margin-top:4px"></div>' +
+        '</div>' +
+        '<button class="btn-chat" onclick="proSetBudgetAndChat(\'' + bookingId + '\',\'' + esc(svc) + '\')" style="flex-shrink:0;white-space:nowrap">💬 Conversar</button>' +
+      '</div>' +
     '</div>';
 
   list.appendChild(card);
+}
+
+// === LIVE GAUGE NO CARD DO PEDIDO (pro) ===
+function onProCardBudgetInput(bookingId, svc) {
+  const val = parseFloat(document.getElementById('proBudgetInput-' + bookingId).value);
+  const gauge = document.getElementById('proBudgetGauge-' + bookingId);
+  if (!gauge) return;
+  if (!val || val < 10) { gauge.innerHTML = ''; return; }
+  if (typeof getPriceGaugeHTML === 'function') {
+    gauge.innerHTML = getPriceGaugeHTML(val, svc, 'pro');
+  }
+}
+
+// === SALVAR PREÇO DO PRO E ABRIR CHAT ===
+async function proSetBudgetAndChat(bookingId, svc) {
+  const val = parseFloat(document.getElementById('proBudgetInput-' + bookingId).value);
+  if (!val || val < 10) {
+    toast('Digite seu preço para conversar com o cliente', 'err');
+    document.getElementById('proBudgetInput-' + bookingId).focus();
+    return;
+  }
+  try {
+    await db.collection('bookings').doc(bookingId).update({ proBudget: Math.round(val) });
+  } catch (e) {
+    console.error('proBudget save:', e);
+  }
+  openProChat(bookingId);
 }
 
 // === ACCEPT REQUEST ===
@@ -779,7 +825,7 @@ async function openProChat(bookingId) {
   document.getElementById('proChatAv').textContent = '👤';
   openM('proChatM');
 
-  // Fetch booking details for header
+  // Fetch booking details for header + check blind negotiation reveal
   try {
     const bkSnap = await db.collection('bookings').doc(bookingId).get();
     if (bkSnap.exists) {
@@ -791,6 +837,13 @@ async function openProChat(bookingId) {
       document.getElementById('proChatAddr').textContent = addr ? '📍 ' + addr : '';
       const svc = (bk.details && bk.details.svc) || bk.service || '';
       document.getElementById('proChatSvc').textContent = svc;
+
+      // === NEGOCIAÇÃO A CEGAS: revela se ambos definiram preço ===
+      const proReveal = document.getElementById('proBlindReveal');
+      if (proReveal) proReveal.style.display = 'none';
+      if (bk.clientBudget && bk.proBudget && !bk.agreedPrice && typeof showBlindNegoReveal === 'function') {
+        showBlindNegoReveal(bk.clientBudget, bk.proBudget, svc, 'pro');
+      }
     }
   } catch (e) {
     console.error('booking fetch error:', e);
@@ -1169,6 +1222,58 @@ function _showProCompCodeModal(bookingId, code) {
 function _closeProCompCodeModal() {
   const modal = document.getElementById('proCompCodeModal');
   if (modal) modal.remove();
-  // Reload to refresh tracking status after closing
   loadAcceptedRequests();
+}
+
+// ================================================================
+// === NEGOCIAÇÃO A CEGAS — AÇÕES DO LADO DO PROFISSIONAL =========
+// ================================================================
+
+// Pro aceita o valor justo (midpoint)
+function proAcceptFairReveal(fair) {
+  if (!_proChatBookingId || !CU || !currentProfessional) return;
+  const el = document.getElementById('proBlindReveal');
+  if (el) el.style.display = 'none';
+  const msg = '✅ Aceito o valor justo de R$ ' + fair + ',00! Pode efetuar o pagamento.';
+  const seq = Date.now(); _proPendingSeqs.add(seq); _proAddMsg(msg, 'sent');
+  db.collection('messages').add({ bookingId: _proChatBookingId, text: msg, sender: 'pro', proName: currentProfessional.name, proId: CU.uid, seq, at: firebase.firestore.FieldValue.serverTimestamp() }).catch(() => {});
+  db.collection('bookings').doc(_proChatBookingId).update({ lastProPosal: fair }).catch(() => {});
+  toast('Aceite enviado! Aguardando pagamento do cliente 💰', 'ok');
+}
+
+// Pro quer negociar no chat
+function proNegotiateInChat() {
+  const el = document.getElementById('proBlindReveal');
+  if (el) el.style.display = 'none';
+  toast('Negocie livremente no chat 💬', 'ok');
+}
+
+// Pro rejeita — pede valor mínimo a aceitar
+function proRejectReveal(clientBudget) {
+  const el = document.getElementById('proBlindReveal');
+  if (!el) return;
+  el.innerHTML =
+    '<div style="font-size:.82rem;font-weight:700;color:var(--text);margin-bottom:8px">❌ A partir de quanto você aceitaria fazer este serviço?</div>' +
+    '<div style="display:flex;gap:6px">' +
+      '<input type="number" id="proRevRejectVal" placeholder="Ex: 250" min="10" max="10000"' +
+        ' style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:var(--rs);font-size:.9rem;background:var(--bg);color:var(--text)">' +
+      '<button onclick="sendProRevReject(' + clientBudget + ')"' +
+        ' style="padding:8px 14px;background:var(--p);color:#fff;border:none;border-radius:var(--rs);font-weight:700;cursor:pointer">Enviar</button>' +
+      '<button onclick="document.getElementById(\'proBlindReveal\').style.display=\'none\'"' +
+        ' style="padding:8px 10px;background:var(--bg);border:1px solid var(--border);border-radius:var(--rs);cursor:pointer">✕</button>' +
+    '</div>';
+}
+
+function sendProRevReject(clientBudget) {
+  const val = parseFloat(document.getElementById('proRevRejectVal').value);
+  if (!val || val < 10) { toast('Valor inválido', 'err'); return; }
+  const msg = '❌ Não consigo aceitar R$ ' + clientBudget + ',00. Aceito a partir de R$ ' + Math.round(val) + ',00.';
+  const seq = Date.now(); _proPendingSeqs.add(seq); _proAddMsg(msg, 'sent');
+  db.collection('messages').add({ bookingId: _proChatBookingId, text: msg, sender: 'pro', proName: currentProfessional.name, proId: CU.uid, seq, at: firebase.firestore.FieldValue.serverTimestamp() }).catch(() => {});
+  db.collection('bookings').doc(_proChatBookingId).update({ lastProPosal: Math.round(val) }).catch(() => {});
+  const el = document.getElementById('proBlindReveal');
+  if (el) el.style.display = 'none';
+  const pa = document.getElementById('proProposeArea');
+  if (pa) { pa.style.display = 'block'; const vi = document.getElementById('proProposeVal'); if (vi) { vi.value = Math.round(val); onProPriceInput(); } }
+  toast('Recusa enviada com contra-proposta 💬', 'ok');
 }
