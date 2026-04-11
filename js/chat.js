@@ -83,13 +83,78 @@ const SQ = {
   'Carreto': '📝 Transporte:\n1️⃣ O que transportar?\n2️⃣ Ajudante?\n3️⃣ Utilitário ou caminhão?\n4️⃣ Escada/elevador?'
 };
 
-// === BLOCKED PATTERNS ===
+// === ANTI-BYPASS FILTER ===
+// Detecta tentativas de tirar a conversa do app (telefone, redes sociais, links).
+// Usa normalização agressiva: remove diacríticos, espaços, troca de letras por
+// números (leet-speak) e palavras como "arroba" / "ponto" antes de testar regex.
 const BLOCK = [
-  /\b\d{2}[\s.-]?\d{4,5}[\s.-]?\d{4}\b/, /whats\s*app/i, /wpp/i, /zap/i, /wts/i,
-  /instagram/i, /insta/i, /@\w+/, /telegram/i, /face\s*book/i, /tik\s*tok/i,
-  /\b[\w.-]+@[\w.-]+\.\w+\b/, /https?:\/\//i, /www\./i,
-  /me\s+chama/i, /passa\s+(seu|teu)/i, /meu\s+(numero|telefone|cel|zap|whats|insta)/i
+  // Telefones: DDD + 4/5 + 4 dígitos, com ou sem separadores (ex.: 11 91234-5678, (21)99999-9999)
+  /\b\d{2}\s*\d{4,5}\s*\d{4}\b/,
+  // Sequências longas de dígitos (>= 9) que normalmente só aparecem em telefones
+  /\b\d{9,}\b/,
+  // E-mail tradicional
+  /\b[\w.+-]+@[\w.-]+\.[a-z]{2,}\b/i,
+  // URLs explícitas
+  /https?:\/\//i, /www\./i, /\b[\w-]+\.(com|br|net|org|io|app|co|me|link|bio|gg)\b/i,
+  // Encurtadores
+  /\b(bit\.ly|tinyurl|lnk\.bio|linktr\.ee|t\.me|wa\.me|wame)\b/i,
+  // Redes sociais e apps de mensagem
+  /whats\s*app|whatz|wpp|wtz|wats|zap\s*zap|zapzap|\bzap\b|wts/i,
+  /instagram|insta\b|\bigg?\b/i,
+  /telegram|tlgr|\btel(e)?gram/i,
+  /face\s*book|fcbk|\bfb\b/i,
+  /tik\s*tok|tk\s*tk/i,
+  /snap\s*chat/i,
+  /discord/i,
+  /signal\s+app/i,
+  // @handle (qualquer @ seguido de letra) — típico de redes sociais
+  /@[a-z0-9._-]{2,}/i,
+  // Frases pedindo contato externo
+  /me\s+chama/i, /passa\s+(seu|teu|o)/i, /(meu|teu|seu)\s+(numero|telefone|tel|cel|zap|whats|insta|nick)/i,
+  /fala\s+comigo\s+(fora|no)/i, /sai\s+daqui/i, /chama\s+(no|la\s+no)/i, /liga\s+(pra|pro)/i
 ];
+
+// Normaliza o texto antes de checar:
+// - lowercase + remove acentos
+// - "ponto"/"dot" -> "." ; "arroba"/"at" -> "@"
+// - colapsa caracteres repetidos (zaaaap -> zap, hhttps -> https)
+// - remove pontuação decorativa (***, ---, _, etc.) sem colar dígitos consecutivos
+// - mantém dígitos/letras/espaços/@/./-
+function _normalizeChatMsg(raw) {
+  if (!raw) return { text: '', compact: '' };
+  let s = String(raw).toLowerCase();
+  // remove diacríticos
+  s = s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  // "Compactação": remove separadores comuns usados pra disfarçar telefones
+  // (espaço, ponto, traço, parênteses, asterisco). Preserva o resto do texto
+  // para que "R$ 150 e R$ 95" NÃO vire uma sequência longa de dígitos, mas
+  // "1 1 9 8 7 6 5 4 3 2 1" SIM.
+  const compact = s.replace(/[\s.\-()*_+]/g, '');
+  // substituições faladas (PT-BR). Não mexemos em "at" — gera falso positivo.
+  s = s.replace(/\s*\bponto\b\s*/g, '.')
+       .replace(/\s*\bdot\b\s*/g, '.')
+       .replace(/\s*\barroba\b\s*/g, '@')
+       .replace(/\s*\btraco\b\s*/g, '-');
+  // leet-speak SÓ para letras óbvias (ex.: z4p -> zap, 1nsta -> insta).
+  // Aplicado em cópia separada para não afetar a detecção de dígitos acima.
+  const leet = s
+    .replace(/0/g, 'o').replace(/1/g, 'i').replace(/3/g, 'e')
+    .replace(/4/g, 'a').replace(/5/g, 's').replace(/7/g, 't');
+  // Colapsa letras repetidas (zaaaaap -> zap).
+  const collapsed = leet.replace(/([a-z])\1{2,}/g, '$1');
+  return { text: collapsed, compact: compact };
+}
+
+// Retorna true se a mensagem contém contato externo.
+// Além dos regex em BLOCK, também bloqueia a versão "compacta" quando houver
+// uma corrida de 9+ dígitos consecutivos — captura "1 1 9 . 8 7 6 - 5 4 3 2".
+function _hasForbiddenContact(raw) {
+  const { text, compact } = _normalizeChatMsg(raw);
+  if (/\d{9,}/.test(compact)) return true;
+  if (BLOCK.some(p => p.test(text))) return true;
+  if (BLOCK.some(p => p.test(compact))) return true;
+  return false;
+}
 
 // === REAL-TIME CHAT STATE ===
 let _chatListener = null;
@@ -581,8 +646,11 @@ function addMsg(t, c) {
 function sendMsg() {
   const inp = document.getElementById('chatIn'), msg = inp.value.trim();
   if (!msg) return; inp.value = '';
-  // Block external contacts
-  if (BLOCK.some(p => p.test(msg))) { addMsg('⛔ Contato externo bloqueado', 'blk'); return; }
+  // Block external contacts (telefone, e-mail, redes, links, leet-speak, falado)
+  if (_hasForbiddenContact(msg)) {
+    addMsg('⛔ Contato externo bloqueado. Combine tudo pelo chat do Maridão.', 'blk');
+    return;
+  }
   // Block price change after agreement
   if (chatSt.agreed && /(\d{2,})/.test(msg) && /\b(topo|fecha|muda|trocar|alterar)\b/i.test(msg)) {
     setTimeout(() => addMsg('⚠️ Valor já combinado em R$ ' + chatSt.price + '. Use o botão Pagar abaixo.', 'sys'), 200);
