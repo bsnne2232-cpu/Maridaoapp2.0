@@ -259,23 +259,33 @@ function showBlindNegoReveal(clientBudget, proBudget, svc, side) {
   const fairMin = Math.round(fair * 0.92);
   const fairMax = Math.round(fair * 1.08);
 
-  // Posta mensagem de sistema no chat (visível para os dois) — apenas 1 vez
+  const sysText =
+    '🎭 Negociação a cegas — valores revelados!\n' +
+    '💰 Cliente ofereceu R$' + clientBudget + '  ·  🔧 Profissional quer R$' + proBudget + '\n\n' +
+    '⚖️ Valor justo sugerido\n' +
+    'R$ ' + fairMin + ' – R$ ' + fairMax + '\n' +
+    '(média R$' + fair + ', calculada entre os dois valores)';
+
+  // Renderiza direto no DOM do chat (imediato, sem depender do listener)
+  if (side === 'client') {
+    addMsg(sysText, 'sys');
+  } else if (typeof _proAddMsg === 'function') {
+    _proAddMsg(sysText, 'sys');
+  }
+
+  // Também salva no Firestore para o outro lado ver quando abrir o chat (apenas 1 vez)
   const bookingId = side === 'client' ? window.currentBookingId : (typeof _proChatBookingId !== 'undefined' ? _proChatBookingId : null);
   if (bookingId) {
     db.collection('bookings').doc(bookingId).get().then(snap => {
       if (snap.exists && !snap.data().blindRevealMsgSent) {
-        const sysText =
-          '🎭 Negociação a cegas — valores revelados!\n' +
-          '💰 Cliente ofereceu R$' + clientBudget + '  ·  🔧 Profissional quer R$' + proBudget + '\n\n' +
-          '⚖️ Valor justo sugerido\n' +
-          'R$ ' + fairMin + ' – R$ ' + fairMax + '\n' +
-          '(média R$' + fair + ', calculada entre os dois valores)';
+        const seq = Date.now();
         db.collection('messages').add({
-          bookingId,
-          text: sysText,
-          sender: 'sys',
-          seq: Date.now(),
+          bookingId, text: sysText, sender: 'sys', seq,
           at: firebase.firestore.FieldValue.serverTimestamp()
+        }).then(ref => {
+          // Marca o doc como já visto para o listener não duplicar
+          if (side === 'client') _seenMsgIds.add(ref.id);
+          else if (typeof _proSeenMsgIds !== 'undefined') _proSeenMsgIds.add(ref.id);
         }).catch(() => {});
         db.collection('bookings').doc(bookingId).update({ blindRevealMsgSent: true }).catch(() => {});
       }
