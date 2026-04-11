@@ -1,0 +1,47 @@
+rules_version = '2';
+
+// =============================================================================
+// Maridão App — Firebase Storage Rules
+// =============================================================================
+// Estrutura esperada:
+//   /professionals/{uid}/doc.jpg     (RG/CNH)
+//   /professionals/{uid}/selfie.jpg  (selfie com documento)
+//   /professionals/{uid}/addr.jpg    (comprovante de endereço)
+//
+// Só o próprio profissional consegue gravar, e só o próprio + admin leem.
+// Nenhum usuário comum pode baixar documento de outra pessoa.
+// =============================================================================
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isSignedIn() { return request.auth != null; }
+    function isSelf(uid)  { return isSignedIn() && request.auth.uid == uid; }
+    function isAdmin() {
+      return isSignedIn()
+        && firestore.exists(/databases/(default)/documents/users/$(request.auth.uid))
+        && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Documentos dos profissionais — privados por definição.
+    match /professionals/{uid}/{fileName} {
+      allow read:  if isSelf(uid) || isAdmin();
+      allow write: if isSelf(uid)
+                   && request.resource.size < 8 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+    }
+
+    // Fotos públicas do card (avatar do profissional) — leitura liberada para logados.
+    match /avatars/{uid}/{fileName} {
+      allow read:  if isSignedIn();
+      allow write: if isSelf(uid)
+                   && request.resource.size < 2 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+    }
+
+    // Fallback: nega.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

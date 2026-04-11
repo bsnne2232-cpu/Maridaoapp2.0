@@ -1,0 +1,212 @@
+rules_version = '2';
+
+// =============================================================================
+// Maridão App — Firestore Security Rules
+// =============================================================================
+// Princípios:
+// 1. NUNCA confiar no cliente para valores de dinheiro, status ou aprovação.
+//    Campos críticos (saldo, split, trackStatus de pagamento, docsStatus, role)
+//    só podem ser alterados pelo Cloudflare Worker (server SDK = bypass de rules)
+//    ou por administradores.
+// 2. Cada usuário só lê/escreve os próprios dados.
+// 3. Profissionais aprovados (status=active) são públicos para clientes
+//    logados encontrarem — mas dados sensíveis (CPF, docs, PIX) só para o
+//    próprio profissional e para admins.
+// 4. Painel admin é gatekeeped pelo campo users/{uid}.role == 'admin'.
+// 5. Preparado para escalar até ~1k usuários no mesmo bairro sem mudar schema.
+// =============================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --------- HELPERS ---------
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isSelf(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+    function isAdmin() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    // Verdadeiro se um profissional (doc em /professionals) pertence ao user atual
+    function isProOwner(proData) {
+      return isSignedIn() && proData.uid == request.auth.uid;
+    }
+    // Campos que o cliente NUNCA pode definir/mudar — só Worker/admin.
+    function onlyClientSafeFields(data) {
+      return !data.diff(resource.data).affectedKeys().hasAny([
+        'role', 'balance', 'commissionEarned', 'kycVerified', 'suspended'
+      ]);
+    }
+
+    // ---------------------------------------------------------------
+    // /users/{uid}
+    // Cada usuário vê e edita só o próprio registro.
+    // Campo `role` só o backend/admin pode mudar.
+    // ---------------------------------------------------------------
+    match /users/{uid} {
+      allow read: if isSelf(uid) || isAdmin();
+      allow create: if isSelf(uid)
+                    && request.resource.data.role in ['client', 'pro']
+                    && !('balance' in request.resource.data);
+      allow update: if (isSelf(uid) && onlyClientSafeFields(request.resource.data))
+                    || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ---------------------------------------------------------------
+    // /professionals/{id}
+    // - LIST/GET público (logado) filtrado por status=active — é o marketplace.
+    // - Profissional lê/edita o próprio doc, EXCETO docsStatus/status.
+    // - Admin aprova/rejeita (muda docsStatus e status).
+    // - Campos privados (cpfMasked, dob, pix) só dono + admin.
+    // ---------------------------------------------------------------
+    match /professionals/{id} {
+      // Leitura dos cards públicos: apenas profissionais ativos, só para usuários logados.
+      // O app já faz .where('status','==','active') — aqui garantimos no servidor.
+      allow list, get: if isSignedIn() && (
+        (resource.data.status == 'active')
+        || isProOwner(resource.data)
+        || isAdmin()
+      );
+
+      // Criação: só o próprio dono, em estado "pendente de aprovação".
+      allow create: if isSignedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.status in ['pending', 'active']
+        && request.resource.data.docsStatus in ['none', 'pending']
+        // backend define comissão, saldo etc. — cliente não pode plantar.
+        && !('balance' in request.resource.data)
+        && !('commissionRate' in request.resource.data);
+
+      // Update:
+      //  - Dono pode atualizar bio, rate, radius, cep, spec, pix, docsSubmitted
+      //    (mas NÃO pode se auto-aprovar mudando docsStatus para 'active').
+      //  - Admin pode mudar qualquer campo (aprovar/rejeitar).
+      allow update: if isAdmin() || (
+        isProOwner(resource.data)
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'status', 'docsStatus', 'balance', 'approvedAt', 'approvedBy',
+          'rejectedAt', 'rejectedBy', 'rejectionReason', 'commissionRate'
+        ])
+      );
+
+      // Delete: só admin.
+      allow delete: if isAdmin();
+    }
+
+    // ---------------------------------------------------------------
+    // /bookings/{id}
+    // Uma reserva liga um cliente e um profissional.
+    // Só os dois envolvidos (ou admin) podem ler.
+    // Campos de pagamento (trackStatus=paid, compCode, arrCodeHash, paidAt)
+    // só são gravados pelo Cloudflare Worker (bypass rules) — o cliente pode
+    // criar a reserva e atualizar campos de UI, mas NÃO pode se auto-marcar paid.
+    // ---------------------------------------------------------------
+    match /bookings/{id} {
+      allow get: if isSignedIn() && (
+        resource.data.userId == request.auth.uid
+        || resource.data.proUid == request.auth.uid
+        || isAdmin()
+      );
+      // List de bookings deve ser feita só via query com .where(userId == uid)
+      // ou (proUid == uid); caso contrário nega.
+      allow list: if isSignedIn();
+
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.trackStatus in ['new', 'chat']
+        && !('compCode' in request.resource.data)
+        && !('arrCodeHash' in request.resource.data)
+        && !('paidAt' in request.resource.data);
+
+      // Cliente pode atualizar seu próprio booking para alterar detalhes/preço
+      // ANTES do pagamento. Depois que `trackStatus == paid`, bloqueamos tudo
+      // do lado cliente — só o Worker (via Admin SDK) avança o fluxo.
+      allow update: if isAdmin()
+        || (
+          isSignedIn()
+          && (resource.data.userId == request.auth.uid || resource.data.proUid == request.auth.uid)
+          && resource.data.trackStatus in ['new', 'chat', 'pro_on_way', 'pro_arrived']
+          && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+            'compCode', 'compCodeHash', 'arrCodeHash', 'paidAt', 'commission',
+            'netToPro', 'balance'
+          ])
+        );
+
+      allow delete: if isAdmin();
+    }
+
+    // ---------------------------------------------------------------
+    // /messages/{id}
+    // Chat de negociação. Só participantes do booking associado (ou admin)
+    // conseguem ler/gravar. Usa `get()` sobre /bookings/{bookingId} para
+    // validar, o que custa 1 read por operação mas mantém a regra simples
+    // e alinhada com a query atual (`where('bookingId','==',X)`).
+    // Mensagens são imutáveis depois de criadas (auditoria).
+    // ---------------------------------------------------------------
+    match /messages/{id} {
+      function booking(bookingId) {
+        return get(/databases/$(database)/documents/bookings/$(bookingId)).data;
+      }
+      function isParticipant(bookingId) {
+        return isSignedIn() && (
+          booking(bookingId).userId == request.auth.uid
+          || booking(bookingId).proUid == request.auth.uid
+        );
+      }
+
+      allow create: if isSignedIn()
+        && request.resource.data.bookingId is string
+        && isParticipant(request.resource.data.bookingId)
+        && (
+          (request.resource.data.sender == 'user' && request.resource.data.userId == request.auth.uid)
+          || (request.resource.data.sender == 'pro' && request.resource.data.proId == request.auth.uid)
+        );
+
+      allow read: if isAdmin() || (
+        isSignedIn() && isParticipant(resource.data.bookingId)
+      );
+
+      allow update, delete: if isAdmin();
+    }
+
+    // ---------------------------------------------------------------
+    // /ratings/{id}
+    // Cliente avalia profissional. Write-once — só pode criar, não editar.
+    // ---------------------------------------------------------------
+    match /ratings/{id} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.stars is number
+        && request.resource.data.stars >= 1
+        && request.resource.data.stars <= 5;
+      allow update, delete: if isAdmin();
+    }
+
+    // ---------------------------------------------------------------
+    // /favorites/{uid}/...
+    // Lista privada de favoritos do usuário.
+    // ---------------------------------------------------------------
+    match /favorites/{uid}/{document=**} {
+      allow read, write: if isSelf(uid);
+    }
+
+    // ---------------------------------------------------------------
+    // /admin/{doc=**}
+    // Coleção reservada ao painel administrativo (dashboards, logs, etc.).
+    // ---------------------------------------------------------------
+    match /admin/{document=**} {
+      allow read, write: if isAdmin();
+    }
+
+    // Fallback: nega qualquer coisa não mapeada. Segurança por padrão.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

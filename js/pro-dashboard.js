@@ -958,8 +958,11 @@ function sendProMsg() {
   const inp = document.getElementById('proChatIn'), msg = inp.value.trim();
   if (!msg || !_proChatBookingId || !CU || !currentProfessional) return;
   inp.value = '';
-  // Block external contacts
-  if (typeof BLOCK !== 'undefined' && BLOCK.some(p => p.test(msg))) { _proAddMsg('⛔ Contato externo bloqueado', 'blk'); return; }
+  // Block external contacts (usa filtro normalizado de chat.js)
+  if (typeof _hasForbiddenContact === 'function' && _hasForbiddenContact(msg)) {
+    _proAddMsg('⛔ Contato externo bloqueado. Negocie tudo pelo chat do Maridão.', 'blk');
+    return;
+  }
   // Renderização otimista: exibe imediatamente
   const seq = Date.now();
   _proPendingSeqs.add(seq);

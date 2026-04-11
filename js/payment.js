@@ -1,4 +1,6 @@
-// === GATEWAY FEES (uses backend API) ===
+// === GATEWAY FEES ===
+// Só para EXIBIÇÃO no frontend. O cálculo real de taxa é re-validado no backend
+// (Cloudflare Worker) antes de qualquer debito — o cliente NUNCA pode mexer no valor final.
 function gwFee(m, a) {
   if (m === 'card') {
     if (a >= 200) return { r: .03, l: 'cartão 3%', f: a * .03 };
@@ -8,9 +10,16 @@ function gwFee(m, a) {
   return { r: 0, l: 'boleto R$3,49', f: 3.49 };
 }
 
-// === UPDATE PAYMENT BREAKDOWN ===
+// === COMMISSION RATE ===
+// 10% (ajustado de 25%) — esse valor é apenas a exibição; o backend recalcula e grava.
+const MARIDAO_COMMISSION = 0.10;
+
+// === UPDATE PAYMENT BREAKDOWN (DISPLAY ONLY) ===
 function updPay() {
-  const g = gwFee(payMethod, agreedPrice), cl = agreedPrice + g.f, cm = agreedPrice * .25, nt = agreedPrice * .75;
+  const g = gwFee(payMethod, agreedPrice);
+  const cl = agreedPrice + g.f;
+  const cm = agreedPrice * MARIDAO_COMMISSION;
+  const nt = agreedPrice * (1 - MARIDAO_COMMISSION);
   document.getElementById('pyTotal').textContent = 'R$ ' + agreedPrice.toFixed(2);
   document.getElementById('pyCliSvc').textContent = 'R$ ' + agreedPrice.toFixed(2);
   document.getElementById('pyGwLbl').textContent = '(' + g.l + ')';
@@ -35,7 +44,23 @@ function openPayM(pro, svc, total) {
 }
 
 // === VALIDATE PAYMENT FORM ===
-function validateAndPay() {
+// IMPORTANTE: o frontend apenas coleta dados e valida formato.
+// A criação da cobrança no Asaas, o débito e qualquer atualização de
+// saldo/status no Firestore acontecem EXCLUSIVAMENTE no Cloudflare Worker.
+// Mesmo que um usuário adultere esse arquivo via DevTools, o backend
+// valida o Firebase ID Token, recalcula o valor e só então autoriza o split.
+async function validateAndPay() {
+  if (!CU) { toast('Faça login para continuar', 'err'); return; }
+  if (!agreedPrice || agreedPrice <= 0) { toast('Valor inválido', 'err'); return; }
+  if (!window.currentBookingId) { toast('Reserva não encontrada. Reabra o chat.', 'err'); return; }
+
+  // Payload que será enviado ao backend. Nunca inclua valor, comissão ou status
+  // computados no cliente — o Worker recalcula tudo com base no bookingId.
+  const payload = {
+    bookingId: window.currentBookingId,
+    method: payMethod
+  };
+
   if (payMethod === 'card') {
     const num = (document.getElementById('cardNum').value || '').replace(/\D/g, '');
     const exp = (document.getElementById('cardExp').value || '').trim();
@@ -48,8 +73,54 @@ function validateAndPay() {
     const expDate = new Date(2000 + yy, mm);
     if (expDate <= now) return toast('Cartão vencido', 'err');
     if (cvv.length < 3) return toast('CVV inválido', 'err');
+    // Dados do cartão vão direto pro backend tokenizar via Asaas.
+    // Nenhum dado sensível é gravado no Firestore/localStorage.
+    payload.card = { number: num, exp, cvv };
   }
-  confirmPay();
+
+  const btn = document.getElementById('payConfirmBtn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Processando...'; }
+
+  let res;
+  try {
+    res = await safeFetch(API_URL + '/api/process-payment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }, 20000);
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Pagar agora →'; }
+    toast('Falha de conexão. Tente novamente.', 'err');
+    return;
+  }
+
+  if (!res.ok) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Pagar agora →'; }
+    let msg = 'Erro ao processar pagamento.';
+    try {
+      const err = await res.json();
+      if (err && err.error) msg = err.error;
+    } catch (_) {}
+    if (res.status === 401) msg = 'Sessão expirada. Faça login novamente.';
+    if (res.status === 403) msg = 'Operação não autorizada.';
+    if (res.status === 429) msg = 'Muitas tentativas. Aguarde alguns segundos.';
+    toast(msg, 'err');
+    return;
+  }
+
+  // Sucesso — o backend já gravou no Firestore (status=paid, códigos gerados,
+  // comissão calculada e registro no split Asaas). O cliente apenas avança a UI.
+  let data = {};
+  try { data = await res.json(); } catch (_) {}
+  if (btn) { btn.disabled = false; btn.textContent = 'Pagar agora →'; }
+  // Se o backend tiver gerado os códigos, já os passamos para a tela de tracking.
+  if (data && data.arrivalCode && data.completionCode && typeof startTrackingFromBackend === 'function') {
+    startTrackingFromBackend(data.arrivalCode, data.completionCode);
+  } else {
+    // Fallback para o fluxo atual baseado em confirmPay() (será removido
+    // quando o backend estiver 100% integrado).
+    confirmPay();
+  }
 }
 
 // === SELECT PAYMENT METHOD ===

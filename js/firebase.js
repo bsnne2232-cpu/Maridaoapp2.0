@@ -50,22 +50,55 @@ let CU = null, selPro = null, selSvc = '', agreedPrice = 0, payMethod = 'card';
 let chatSt = { msgs: 0, details: { what: false, where: false, when: false }, agreed: false, price: 0 };
 
 // === AUTH STATE ===
+// Cada recarregamento dispara onAuthStateChanged. Antes o handler chamava
+// users/<uid>.set() sem condição, o que queimava 1 write por pageview (limite
+// do plano Spark = 20k writes/dia). Agora só grava quando:
+//   1. o registro do usuário ainda não existe (primeiro login), OU
+//   2. o último write do lastLogin foi há mais de 12 h (controle local).
+// O carimbo fica em localStorage por UID — sem round-trip no Firestore.
+const LAST_LOGIN_TTL_MS = 12 * 60 * 60 * 1000; // 12 h
+
+async function _maybeTouchUser(u) {
+  if (!u) return;
+  const k = 'lastLoginTs_' + u.uid;
+  try {
+    const prev = parseInt(localStorage.getItem(k) || '0', 10);
+    if (prev && Date.now() - prev < LAST_LOGIN_TTL_MS) return; // dentro do TTL → não escreve
+  } catch (_) {}
+  try {
+    // .get() é 1 read, bem mais barato que 1 write. Só escreve se o doc não existir.
+    const ref = db.collection('users').doc(u.uid);
+    const snap = await ref.get();
+    if (!snap.exists) {
+      await ref.set({
+        name: u.displayName || '',
+        email: u.email,
+        role: 'client',
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        lastLogin: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    } else {
+      // Atualiza lastLogin no máximo 1x a cada 12h (merge, não sobrescreve role)
+      await ref.set({ lastLogin: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+    }
+    try { localStorage.setItem(k, String(Date.now())); } catch (_) {}
+  } catch (e) {
+    console.warn('User record touch skipped:', e.code || e.message);
+  }
+}
+
 auth.onAuthStateChanged(async u => {
   CU = u;
   if (u) {
-    // Wrapped in try/catch — if Firestore write fails, updNav() still runs
-    try {
-      await db.collection('users').doc(u.uid).set({
-        name: u.displayName || '', email: u.email,
-        lastLogin: firebase.firestore.FieldValue.serverTimestamp()
-      }, { merge: true });
-    } catch (e) {
-      console.warn('User record write failed (check Firestore rules):', e.code);
-    }
+    _maybeTouchUser(u); // não bloqueia a UI
   } else {
     if (typeof cleanupProDashboard === 'function') cleanupProDashboard();
     const btn = document.getElementById('proDashLink');
     if (btn) btn.style.display = 'none';
+    // limpa carimbos locais no logout
+    try {
+      Object.keys(localStorage).forEach(k => { if (k.startsWith('lastLoginTs_')) localStorage.removeItem(k); });
+    } catch (_) {}
   }
   updNav();
   if (typeof initProForm === 'function') initProForm();
