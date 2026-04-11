@@ -245,14 +245,20 @@ async function acceptRequest(bookingId) {
   const btn = document.querySelector('#req-' + bookingId + ' .btn-accept');
   if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
 
+  // Captura o preço se o pro já preencheu o campo antes de aceitar
+  const priceInput = document.getElementById('proBudgetInput-' + bookingId);
+  const preBudget  = priceInput ? parseFloat(priceInput.value) : null;
+
   try {
-    await db.collection('bookings').doc(bookingId).update({
+    const updateData = {
       acceptedByPro: currentProfessional.name,
       proEmail: currentProfessional.email,
       proId: CU.uid,
       status: 'accepted',
       acceptedAt: firebase.firestore.FieldValue.serverTimestamp()
-    });
+    };
+    if (preBudget && preBudget >= 10) updateData.proBudget = Math.round(preBudget);
+    await db.collection('bookings').doc(bookingId).update(updateData);
 
     // Notify client
     const bkSnap = await db.collection('bookings').doc(bookingId).get();
@@ -401,20 +407,48 @@ async function loadAcceptedRequests() {
         }
       }
 
+      const svcName = esc(booking.service || '—');
+      const svcKey  = booking.service || '';
+
+      // === SEÇÃO DE PREÇO — negociação a cegas ===
+      let priceSection = '';
+      if (booking.agreedPrice) {
+        // Preço já combinado — só mostra o valor
+        priceSection = '<div style="font-size:1.3rem;font-weight:800;color:var(--p)">R$ ' + booking.agreedPrice + ',00</div>';
+      } else if (booking.proBudget) {
+        // Pro já definiu preço mas aguarda revelação
+        priceSection =
+          '<div style="font-size:.72rem;color:var(--text2);margin-bottom:2px">Seu preço definido</div>' +
+          '<div style="font-size:1.15rem;font-weight:800;color:#F97316">R$ ' + booking.proBudget + ',00</div>' +
+          (booking.clientBudget
+            ? '<div style="font-size:.68rem;color:#10B981;margin-top:2px">✅ Revelação pronta no chat!</div>'
+            : '<div style="font-size:.68rem;color:var(--text2);margin-top:2px">⏳ Aguardando orçamento do cliente</div>') +
+          '<button class="btn-chat" onclick="openProChat(\'' + bookingId + '\')" style="margin-top:6px">💬 Chat</button>';
+      } else {
+        // Pro ainda não definiu preço → força preenchimento
+        priceSection =
+          '<div style="font-size:.72rem;font-weight:700;color:var(--text);margin-bottom:4px">💰 Defina seu preço antes de conversar</div>' +
+          '<div style="font-size:.65rem;color:var(--text2);margin-bottom:6px">🔒 O cliente só verá quando ambos entrarem no chat</div>' +
+          '<input type="number" id="proBudgetInput-' + bookingId + '" placeholder="Ex: 300" min="10" max="10000"' +
+            ' style="width:110px;padding:6px 10px;border:1.5px solid var(--p);border-radius:var(--rs);font-size:.9rem;background:var(--bg);color:var(--text);display:block;margin-bottom:4px"' +
+            ' oninput="onProCardBudgetInput(\'' + bookingId + '\',\'' + svcKey + '\')">' +
+          '<div id="proBudgetGauge-' + bookingId + '" style="margin-bottom:6px"></div>' +
+          '<button class="btn-chat" onclick="proSetBudgetAndChat(\'' + bookingId + '\',\'' + svcKey + '\')">💬 Conversar</button>';
+      }
+
       const card = document.createElement('div');
       card.className = 'pro-request-card';
       card.id = 'acc-' + bookingId;
       card.innerHTML =
         '<div style="display:flex;justify-content:space-between;align-items:start;gap:12px">' +
           '<div style="flex:1">' +
-            '<h4 style="margin:0 0 4px 0">' + esc(booking.service || '—') + '</h4>' +
+            '<h4 style="margin:0 0 4px 0">' + svcName + '</h4>' +
             '<div style="font-size:.85rem;color:var(--text2);margin-bottom:4px">👤 ' + clientName + '</div>' +
             '<div style="font-size:.85rem;color:var(--text2);margin-bottom:8px">📍 ' + addr + '</div>' +
             '<div style="display:inline-block;padding:4px 8px;border-radius:4px;font-size:.75rem;font-weight:700;background:' + statusColor + '22;color:' + statusColor + '">' + statusBadge + '</div>' +
           '</div>' +
-          '<div style="text-align:right;flex-shrink:0;display:flex;flex-direction:column;align-items:flex-end;gap:8px">' +
-            (booking.agreedPrice ? '<div style="font-size:1.3rem;font-weight:800;color:var(--p)">R$ ' + booking.agreedPrice + ',00</div>' : '') +
-            '<button class="btn-chat" onclick="openProChat(\'' + bookingId + '\')">💬 Chat</button>' +
+          '<div style="text-align:right;flex-shrink:0;display:flex;flex-direction:column;align-items:flex-end;gap:4px">' +
+            priceSection +
           '</div>' +
         '</div>' +
         (trackSection ? '<div style="margin-top:12px;border-top:1px solid var(--border);padding-top:12px">' + trackSection + '</div>' : '');

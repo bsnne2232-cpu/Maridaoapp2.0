@@ -261,60 +261,73 @@ function showBlindNegoReveal(clientBudget, proBudget, svc, side) {
   const range = SVC_PRICE_RANGE[svc] || { min: 60, fair: 200, max: 1000 };
 
   // Posição do valor justo no termômetro
-  const pct = Math.min(96, Math.max(4, ((fair - range.min) / (range.max - range.min)) * 100));
+  const pct = Math.min(94, Math.max(6, ((fair - range.min) / (range.max - range.min)) * 100));
   let fairColor = '#10B981';
-  if (fair < range.min * 0.65) fairColor = '#EF4444';
-  else if (fair < range.min) fairColor = '#F97316';
-  else if (fair > range.max) fairColor = '#8B5CF6';
-  else if (fair > range.fair) fairColor = '#3B82F6';
+  let fairLabel = 'Faixa justa de mercado';
+  if (fair < range.min * 0.65) { fairColor = '#EF4444'; fairLabel = 'Abaixo do mercado'; }
+  else if (fair < range.min)   { fairColor = '#F97316'; fairLabel = 'Um pouco abaixo'; }
+  else if (fair > range.max)   { fairColor = '#8B5CF6'; fairLabel = 'Acima da média'; }
+  else if (fair > range.fair)  { fairColor = '#3B82F6'; fairLabel = 'Acima da média'; }
 
   const gap = Math.abs(proBudget - clientBudget);
   const gapPct = Math.round((gap / Math.max(clientBudget, proBudget)) * 100);
 
   let gapMsg = '';
-  if (gapPct <= 15) gapMsg = '✅ Valores muito próximos! Boa chance de acordo.';
-  else if (gapPct <= 35) gapMsg = '💬 Diferença moderada — o valor justo está no meio.';
-  else gapMsg = '⚠️ Diferença grande — considere o valor justo como ponto de partida.';
+  if (gapPct <= 15)      gapMsg = '✅ Valores muito próximos! Boa chance de acordo.';
+  else if (gapPct <= 35) gapMsg = '💬 Diferença moderada — ponto médio é um bom começo.';
+  else                   gapMsg = '⚠️ Diferença grande — considere o valor justo sugerido.';
 
   const clientLabel = side === 'client' ? '💰 Você ofereceu' : '💰 Cliente ofereceu';
-  const proLabel    = side === 'client' ? '🔧 Profissional quer' : '🔧 Você quer';
-  const clientVal   = side === 'client' ? clientBudget : clientBudget;
-  const proVal      = side === 'client' ? proBudget    : proBudget;
+  const proLabel    = side === 'client' ? '🔧 Profissional quer' : '🔧 Você quer receber';
 
-  const acceptFn   = side === 'client' ? 'acceptFairPrice(' + fair + ')' : 'proAcceptFairReveal(' + fair + ')';
-  const negotiateFn = side === 'client' ? 'negotiateInChat()' : 'proNegotiateInChat()';
-  const rejectFn   = side === 'client' ? 'clientRejectReveal(' + proBudget + ')' : 'proRejectReveal(' + clientBudget + ')';
+  const acceptFn    = side === 'client' ? 'acceptFairPrice(' + fair + ')' : 'proAcceptFairReveal(' + fair + ')';
+  const negotiateFn = side === 'client' ? 'negotiateInChat()'             : 'proNegotiateInChat()';
+  const rejectFn    = side === 'client' ? 'clientRejectReveal(' + proBudget + ')' : 'proRejectReveal(' + clientBudget + ')';
 
   el.style.display = 'block';
   el.innerHTML =
-    '<div style="font-size:.7rem;font-weight:800;color:var(--p);letter-spacing:.8px;margin-bottom:8px">🎭 NEGOCIAÇÃO A CEGAS — REVELAÇÃO</div>' +
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">' +
-      '<div style="background:var(--bg);border-radius:var(--rs);padding:10px;text-align:center">' +
-        '<div style="font-size:.68rem;color:var(--text2);margin-bottom:4px">' + clientLabel + '</div>' +
-        '<div style="font-size:1.3rem;font-weight:800;color:var(--p)">R$ ' + clientVal + '</div>' +
-      '</div>' +
-      '<div style="background:var(--bg);border-radius:var(--rs);padding:10px;text-align:center">' +
-        '<div style="font-size:.68rem;color:var(--text2);margin-bottom:4px">' + proLabel + '</div>' +
-        '<div style="font-size:1.3rem;font-weight:800;color:#F97316">R$ ' + proVal + '</div>' +
+    // Cabeçalho
+    '<div style="display:flex;align-items:center;gap:6px;margin-bottom:10px">' +
+      '<span style="font-size:1.1rem">🎭</span>' +
+      '<div>' +
+        '<div style="font-size:.78rem;font-weight:800;color:var(--p);letter-spacing:.5px">NEGOCIAÇÃO A CEGAS — REVELAÇÃO</div>' +
+        '<div style="font-size:.68rem;color:var(--text2)">Os valores foram revelados ao mesmo tempo para ambos</div>' +
       '</div>' +
     '</div>' +
-    '<div style="background:var(--bg);border-radius:var(--rs);padding:10px;margin-bottom:8px">' +
-      '<div style="font-size:.68rem;color:var(--text2);margin-bottom:4px;text-align:center">⚖️ VALOR JUSTO SUGERIDO</div>' +
-      '<div style="font-size:1.4rem;font-weight:800;color:' + fairColor + ';text-align:center;margin-bottom:8px">' +
+    // Valores lado a lado com seta central
+    '<div style="display:grid;grid-template-columns:1fr auto 1fr;gap:6px;align-items:center;margin-bottom:10px">' +
+      '<div style="background:var(--bg);border:2px solid var(--p);border-radius:var(--rs);padding:10px;text-align:center">' +
+        '<div style="font-size:.65rem;color:var(--text2);margin-bottom:3px">' + clientLabel + '</div>' +
+        '<div style="font-size:1.5rem;font-weight:900;color:var(--p)">R$ ' + clientBudget + '</div>' +
+      '</div>' +
+      '<div style="text-align:center;font-size:1.2rem;color:var(--text2)">⇄</div>' +
+      '<div style="background:var(--bg);border:2px solid #F97316;border-radius:var(--rs);padding:10px;text-align:center">' +
+        '<div style="font-size:.65rem;color:var(--text2);margin-bottom:3px">' + proLabel + '</div>' +
+        '<div style="font-size:1.5rem;font-weight:900;color:#F97316">R$ ' + proBudget + '</div>' +
+      '</div>' +
+    '</div>' +
+    // Caixa do valor justo (destaque principal)
+    '<div style="background:' + fairColor + '18;border:2px solid ' + fairColor + ';border-radius:var(--rs);padding:12px;margin-bottom:10px">' +
+      '<div style="font-size:.68rem;font-weight:700;color:' + fairColor + ';text-align:center;margin-bottom:4px;letter-spacing:.5px">⚖️ VALOR JUSTO CALCULADO (MÉDIA)</div>' +
+      '<div style="font-size:1.8rem;font-weight:900;color:' + fairColor + ';text-align:center;margin-bottom:2px">' +
         'R$ ' + fairMin + ' – R$ ' + fairMax +
       '</div>' +
-      '<div style="display:flex;justify-content:space-between;font-size:.64rem;color:var(--text2);margin-bottom:3px">' +
-        '<span>Muito baixo</span><span>Justo (R$' + range.fair + ')</span><span>Alto</span>' +
+      '<div style="font-size:.7rem;color:' + fairColor + ';text-align:center;margin-bottom:8px;opacity:.85">' + fairLabel + ' · média de R$' + fair + '</div>' +
+      '<div style="display:flex;justify-content:space-between;font-size:.6rem;color:var(--text2);margin-bottom:3px">' +
+        '<span>R$' + range.min + ' (mín)</span>' +
+        '<span style="font-weight:700">R$' + range.fair + ' (ref mercado)</span>' +
+        '<span>R$' + range.max + ' (máx)</span>' +
       '</div>' +
       '<div class="gauge-track">' +
-        '<div class="gauge-fill" style="width:' + pct + '%"></div>' +
+        '<div class="gauge-fill" style="width:' + pct + '%;background:' + fairColor + '"></div>' +
         '<div class="gauge-tip" style="left:' + pct + '%;background:' + fairColor + '"></div>' +
       '</div>' +
-      '<div style="font-size:.72rem;color:var(--text2);margin-top:6px;text-align:center">' + gapMsg + '</div>' +
+      '<div style="font-size:.7rem;color:var(--text2);margin-top:8px;text-align:center;font-weight:600">' + gapMsg + '</div>' +
     '</div>' +
+    // Ações
     '<div class="nego-actions">' +
-      '<button class="nego-btn nego-accept" onclick="' + acceptFn + '">✅ Aceitar justo</button>' +
-      '<button class="nego-btn nego-counter" onclick="' + negotiateFn + '">💬 Negociar</button>' +
+      '<button class="nego-btn nego-accept" onclick="' + acceptFn + '">✅ Aceitar R$' + fair + '</button>' +
+      '<button class="nego-btn nego-counter" onclick="' + negotiateFn + '">💬 Negociar no chat</button>' +
       '<button class="nego-btn nego-reject" onclick="' + rejectFn + '">❌ Recusar</button>' +
     '</div>';
 }
