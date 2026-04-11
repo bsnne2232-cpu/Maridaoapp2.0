@@ -202,7 +202,7 @@ footer a{display:block;font-size:.8rem;padding:3px 0;transition:color .2s}footer
 .cmsg.sent{align-self:flex-end;background:var(--p);color:#fff;border-bottom-right-radius:4px}
 .cmsg.recv{align-self:flex-start;background:var(--card);border:1px solid var(--border);border-bottom-left-radius:4px}
 [data-theme="dark"] .cmsg.recv{background:var(--input);border-color:var(--border)}
-.cmsg.sys{align-self:center;background:var(--pl);color:var(--p);font-size:.72rem;padding:8px 14px;border-radius:8px;max-width:90%;text-align:center;font-weight:500}
+.cmsg.sys{align-self:center;background:var(--pl);color:var(--p);font-size:.74rem;padding:10px 16px;border-radius:10px;max-width:92%;text-align:center;font-weight:600;border:1.5px solid var(--p);line-height:1.65}
 .cmsg.blk{align-self:center;background:#FEE2E2;color:var(--red);font-size:.75rem;font-weight:600;padding:8px 14px;border-radius:8px}
 .chat-pay{background:var(--gl);border-top:1px solid var(--border);padding:14px 16px;text-align:center;display:none}.chat-pay.show{display:block}
 .chat-pay .cp-price{font-size:1.3rem;font-weight:800;color:var(--green)}.chat-pay .cp-label{font-size:.72rem;color:var(--text2);margin-bottom:8px}

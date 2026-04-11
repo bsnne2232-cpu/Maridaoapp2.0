@@ -258,6 +258,29 @@ function showBlindNegoReveal(clientBudget, proBudget, svc, side) {
   const fair = Math.round((clientBudget + proBudget) / 2);
   const fairMin = Math.round(fair * 0.92);
   const fairMax = Math.round(fair * 1.08);
+
+  // Posta mensagem de sistema no chat (visível para os dois) — apenas 1 vez
+  const bookingId = side === 'client' ? window.currentBookingId : (typeof _proChatBookingId !== 'undefined' ? _proChatBookingId : null);
+  if (bookingId) {
+    db.collection('bookings').doc(bookingId).get().then(snap => {
+      if (snap.exists && !snap.data().blindRevealMsgSent) {
+        const sysText =
+          '🎭 Negociação a cegas — valores revelados!\n' +
+          '💰 Cliente ofereceu R$' + clientBudget + '  ·  🔧 Profissional quer R$' + proBudget + '\n\n' +
+          '⚖️ Valor justo sugerido\n' +
+          'R$ ' + fairMin + ' – R$ ' + fairMax + '\n' +
+          '(média R$' + fair + ', calculada entre os dois valores)';
+        db.collection('messages').add({
+          bookingId,
+          text: sysText,
+          sender: 'sys',
+          seq: Date.now(),
+          at: firebase.firestore.FieldValue.serverTimestamp()
+        }).catch(() => {});
+        db.collection('bookings').doc(bookingId).update({ blindRevealMsgSent: true }).catch(() => {});
+      }
+    }).catch(() => {});
+  }
   const range = SVC_PRICE_RANGE[svc] || { min: 60, fair: 200, max: 1000 };
 
   // Posição do valor justo no termômetro
