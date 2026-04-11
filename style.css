@@ -249,6 +249,23 @@ footer a{display:block;font-size:.8rem;padding:3px 0;transition:color .2s}footer
 .trk-step.now .trk-dot{background:var(--p);color:#fff;animation:pulse 1.8s infinite}
 @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(27,101,214,.25)}50%{box-shadow:0 0 0 10px rgba(27,101,214,0)}}
 .trk-lbl{font-size:.88rem;font-weight:600}.trk-time{font-size:.75rem;color:var(--text3);font-family:var(--font2)}
+/* TRACKING AWAIT INDICATOR */
+.trk-await{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--bg2);border-radius:var(--rs);font-size:.8rem;color:var(--text2);margin-top:4px}
+.trk-await-dot{width:10px;height:10px;border-radius:50%;background:var(--p);flex-shrink:0;animation:trk-pulse 1.4s ease-in-out infinite}
+@keyframes trk-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.8)}}
+/* PRO TRACKING CONTROLS (em andamento tab) */
+.pro-track-box{background:var(--bg2);border:1.5px solid var(--border);border-radius:var(--rs);padding:12px 14px}
+.pro-track-active{border-color:var(--p);background:var(--pl)}
+.pro-track-status{font-size:.88rem;font-weight:700;color:var(--text)}
+.btn-track-arrive{padding:9px 16px;background:linear-gradient(135deg,#3B82F6,#2563EB);color:#fff;border:none;border-radius:var(--rs);font-weight:700;cursor:pointer;font-size:.85rem;transition:opacity .15s}
+.btn-track-arrive:hover{opacity:.88}
+.btn-track-confirm{padding:9px 14px;background:linear-gradient(135deg,#10B981,#059669);color:#fff;border:none;border-radius:var(--rs);font-weight:700;cursor:pointer;font-size:.85rem;transition:opacity .15s}
+.btn-track-confirm:hover{opacity:.88}
+.btn-track-finish{padding:11px 16px;background:linear-gradient(135deg,#059669,#10B981);color:#fff;border:none;border-radius:var(--rs);font-weight:700;cursor:pointer;font-size:.9rem;transition:opacity .15s}
+.btn-track-finish:hover{opacity:.88}
+/* PRO CODE DIGIT INPUTS */
+.trk-digit-input{width:42px;height:50px;text-align:center;font-size:1.4rem;font-weight:800;border:1.5px solid var(--border);border-radius:var(--rs);background:var(--bg);color:var(--text);transition:border-color .2s}
+.trk-digit-input:focus{border-color:var(--p);outline:none}
 /* TOAST */
 .toast{position:fixed;top:20px;right:20px;padding:14px 20px;border-radius:var(--rs);font-size:.85rem;font-weight:600;z-index:9999;transform:translateX(120%);transition:transform .3s ease;display:flex;align-items:center;gap:8px;color:#fff;box-shadow:var(--shl);max-width:360px}
 .toast.show{transform:translateX(0)}.toast.ok{background:var(--green)}.toast.err{background:var(--red)}.toast.inf{background:var(--text)}

@@ -11,6 +11,9 @@ const _codeAttempts = { arr: 0, comp: 0, arrLocked: false, compLocked: false };
 const MAX_CODE_ATTEMPTS = 5;
 const LOCKOUT_MS = 60000; // 1 minute lockout
 
+let _trackingBookingListener = null; // real-time listener on booking document
+let _storedCompCode = null;          // completion code stored for fallback verify
+
 function checkAttempts(type) {
   if (_codeAttempts[type + 'Locked']) {
     toast('Muitas tentativas. Aguarde 1 minuto.', 'err');
@@ -26,7 +29,7 @@ function checkAttempts(type) {
   return true;
 }
 
-// === CONFIRM PAYMENT → START TRACKING (compatible with current backend endpoints) ===
+// === CONFIRM PAYMENT → START TRACKING ===
 async function confirmPay() {
   if (!CU) { toast('Faça login para continuar', 'err'); return; }
   if (!agreedPrice || agreedPrice <= 0) { toast('Valor inválido', 'err'); return; }
@@ -57,16 +60,30 @@ async function confirmPay() {
     return;
   }
 
-  // Keep only hashed codes in memory; never persist plain codes
-  trackingState.currentPaymentId = null;
+  // Keep hashed codes in memory
   trackingState.arrHash = await hashCode(arrCode);
   trackingState.compHash = await hashCode(compCode);
-
+  _storedCompCode = compCode; // fallback for session recovery
   _codeAttempts.arr = 0; _codeAttempts.comp = 0;
   _codeAttempts.arrLocked = false; _codeAttempts.compLocked = false;
 
+  // Persist arrival hash + completion code in Firestore so the pro can access them
+  if (window.currentBookingId) {
+    db.collection('bookings').doc(window.currentBookingId).update({
+      arrCodeHash: trackingState.arrHash,
+      compCode: compCode,           // pro reads this to show to client
+      compCodeHash: trackingState.compHash,
+      trackStatus: 'paid',
+      paidAt: firebase.firestore.FieldValue.serverTimestamp()
+    }).catch(e => console.error('tracking update:', e));
+  }
+
+  // Setup initial UI
   document.getElementById('arrCode').textContent = arrCode;
-  ['arrCodeSec', 'arrVerSec', 'compSec', 'doneSec'].forEach(id => document.getElementById(id).style.display = 'none');
+  ['arrCodeSec', 'compSec', 'doneSec'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
   document.getElementById('arrCodeSec').style.display = 'block';
   document.getElementById('trkSteps').style.display = 'flex';
   const s = document.querySelectorAll('.trk-step');
@@ -74,59 +91,75 @@ async function confirmPay() {
   s[0].classList.add('done', 'now');
   s[0].querySelector('.trk-time').textContent = 'Agora';
 
-  setTimeout(() => {
-    s[1].classList.add('done', 'now');
-    s[1].querySelector('.trk-time').textContent = '15 min';
-    toast('Profissional a caminho! 🚗', 'ok');
-  }, 3000);
+  // Real-time listener: reacts to pro confirming arrival
+  _startTrackingListener(window.currentBookingId);
+}
 
-  setTimeout(() => {
-    document.getElementById('arrCodeSec').style.display = 'none';
-    document.getElementById('arrVerSec').style.display = 'block';
-    toast('Chegou! Confirme com código 🔑', 'ok');
-  }, 6000);
+// === BOOKING LISTENER — advances client UI when pro acts ===
+function _startTrackingListener(bookingId) {
+  if (!bookingId) return;
+  if (_trackingBookingListener) { _trackingBookingListener(); _trackingBookingListener = null; }
+
+  _trackingBookingListener = db.collection('bookings').doc(bookingId).onSnapshot(snap => {
+    if (!snap.exists) return;
+    const bk = snap.data();
+    const ts = bk.trackStatus;
+
+    if (ts === 'pro_on_way') {
+      const s = document.querySelectorAll('.trk-step');
+      if (!s[1].classList.contains('done')) {
+        s[1].classList.add('done', 'now');
+        s[1].querySelector('.trk-time').textContent = 'A caminho';
+        toast('Profissional a caminho! 🚗', 'ok');
+      }
+    }
+
+    if (ts === 'pro_arrived') {
+      document.getElementById('arrCodeSec').style.display = 'none';
+      const s = document.querySelectorAll('.trk-step');
+      s[1].classList.add('done'); s[1].querySelector('.trk-time').textContent = 'Chegou';
+      s[2].classList.add('done'); s[2].querySelector('.trk-time').textContent = 'Confirmado';
+      s[3].classList.add('done', 'now'); s[3].querySelector('.trk-time').textContent = 'Agora';
+      s[4].classList.add('now'); s[4].querySelector('.trk-time').textContent = 'Aguardando';
+      document.getElementById('compSec').style.display = 'block';
+      toast('Profissional confirmou chegada! Serviço em andamento 🔧', 'ok');
+    }
+
+    if (ts === 'completed') {
+      // Handled by verifyComp locally; ignore duplicate triggers
+    }
+  }, err => console.error('tracking listener:', err));
 }
 
 // === RECOVER PENDING PAYMENT ===
-// Sem endpoint de pendência no backend atual; evitamos reconstruir estado sensível.
 async function checkPendingPayment() {
   return;
 }
 
-// === ARRIVAL CODE ===
+// === ARRIVAL CODE INPUTS ===
 function aNext(el, i) { el.value = el.value.replace(/\D/g, ''); if (el.value && i < 4) document.getElementById('aI' + (i + 1)).focus(); }
 function cNext(el, i) { el.value = el.value.replace(/\D/g, ''); if (el.value && i < 4) document.getElementById('cI' + (i + 1)).focus(); }
 
+// === LEGACY ARRIVAL VERIFY (kept for fallback) ===
 async function verifyArr() {
   if (!checkAttempts('arr')) return;
   const v = [1, 2, 3, 4].map(i => document.getElementById('aI' + i).value).join('');
   const vHash = await hashCode(v);
 
   if (!trackingState.arrHash) {
-    toast('Código não disponível nesta sessão. Inicie um novo fluxo de pagamento.', 'err');
+    toast('Código não disponível nesta sessão.', 'err');
     return;
   }
 
   if (vHash === trackingState.arrHash) {
-    document.getElementById('arrVerSec').style.display = 'none';
     document.getElementById('arrErr').style.display = 'none';
     const s = document.querySelectorAll('.trk-step');
-    s[2].classList.add('done');
-    s[2].querySelector('.trk-time').textContent = 'Confirmado';
+    s[2].classList.add('done'); s[2].querySelector('.trk-time').textContent = 'Confirmado';
+    s[3].classList.add('done', 'now'); s[3].querySelector('.trk-time').textContent = 'Agora';
+    s[4].classList.add('now'); s[4].querySelector('.trk-time').textContent = 'Aguardando';
+    document.getElementById('compSec').style.display = 'block';
     toast('Código ok! Serviço em andamento 🔧', 'ok');
     _codeAttempts.arr = 0;
-
-    setTimeout(() => {
-      s[3].classList.add('done', 'now');
-      s[3].querySelector('.trk-time').textContent = 'Agora';
-    }, 2000);
-
-    setTimeout(() => {
-      s[4].classList.add('now');
-      s[4].querySelector('.trk-time').textContent = 'Aguardando';
-      document.getElementById('compSec').style.display = 'block';
-      toast('Peça o código de conclusão ao profissional ✅', 'ok');
-    }, 5000);
   } else {
     document.getElementById('arrErr').style.display = 'block';
     [1, 2, 3, 4].forEach(i => { document.getElementById('aI' + i).value = ''; });
@@ -134,18 +167,44 @@ async function verifyArr() {
   }
 }
 
-// === COMPLETION CODE ===
+// === COMPLETION CODE VERIFY ===
 async function verifyComp() {
   if (!checkAttempts('comp')) return;
   const v = [1, 2, 3, 4].map(i => document.getElementById('cI' + i).value).join('');
-  const vHash = await hashCode(v);
 
-  if (!trackingState.compHash) {
-    toast('Código não disponível nesta sessão. Inicie um novo fluxo de pagamento.', 'err');
-    return;
+  // Primary: in-memory hash
+  if (trackingState.compHash) {
+    const vHash = await hashCode(v);
+    if (vHash !== trackingState.compHash) {
+      _showCompErr();
+      return;
+    }
+  } else if (_storedCompCode) {
+    // Fallback: direct match from stored code
+    if (v !== _storedCompCode) {
+      _showCompErr();
+      return;
+    }
+  } else {
+    // Last resort: verify via Firestore compCodeHash
+    try {
+      const snap = await db.collection('bookings').doc(window.currentBookingId).get();
+      if (snap.exists) {
+        const bk = snap.data();
+        if (bk.compCodeHash) {
+          const vHash = await hashCode(v);
+          if (vHash !== bk.compCodeHash) { _showCompErr(); return; }
+        } else if (bk.compCode && v !== bk.compCode) {
+          _showCompErr(); return;
+        }
+      }
+    } catch (_) {
+      toast('Erro ao verificar código.', 'err');
+      return;
+    }
   }
 
-  // Optional backend validation (if endpoint supports this code type)
+  // Optional backend validation
   try {
     await safeFetch(API_URL + '/api/verify-code', {
       method: 'POST',
@@ -154,20 +213,31 @@ async function verifyComp() {
     }, 10000);
   } catch (_) {}
 
-  if (vHash === trackingState.compHash) {
-    document.getElementById('compSec').style.display = 'none';
-    document.getElementById('trkSteps').style.display = 'none';
-    const s = document.querySelectorAll('.trk-step');
-    s[4].classList.add('done');
-    document.getElementById('doneAmt').textContent = 'R$ ' + (agreedPrice * .75).toFixed(2);
-    document.getElementById('doneSec').style.display = 'block';
-    toast('Concluído! Pagamento liberado! 🎉', 'ok');
-    _codeAttempts.comp = 0;
-  } else {
-    document.getElementById('compErr').style.display = 'block';
-    [1, 2, 3, 4].forEach(i => { document.getElementById('cI' + i).value = ''; });
-    document.getElementById('cI1').focus();
+  // Mark booking completed in Firestore
+  if (window.currentBookingId) {
+    db.collection('bookings').doc(window.currentBookingId).update({
+      trackStatus: 'completed',
+      status: 'completed',
+      completedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }).catch(() => {});
   }
+
+  if (_trackingBookingListener) { _trackingBookingListener(); _trackingBookingListener = null; }
+
+  document.getElementById('compSec').style.display = 'none';
+  document.getElementById('trkSteps').style.display = 'none';
+  const s = document.querySelectorAll('.trk-step');
+  s[4].classList.add('done');
+  document.getElementById('doneAmt').textContent = 'R$ ' + (agreedPrice * .75).toFixed(2);
+  document.getElementById('doneSec').style.display = 'block';
+  toast('Concluído! Pagamento liberado! 🎉', 'ok');
+  _codeAttempts.comp = 0;
+}
+
+function _showCompErr() {
+  document.getElementById('compErr').style.display = 'block';
+  [1, 2, 3, 4].forEach(i => { document.getElementById('cI' + i).value = ''; });
+  document.getElementById('cI1').focus();
 }
 
 // === RATING ===
@@ -177,5 +247,5 @@ function rate(n) {
     s.style.color = i < n ? '#F59E0B' : '#D1D5DB';
   });
   toast(n + ' estrela' + (n > 1 ? 's' : '') + ' enviada! ⭐', 'ok');
-  if (CU) db.collection('ratings').add({ userId: CU.uid, pro: selPro.n, stars: n, at: firebase.firestore.FieldValue.serverTimestamp() });
+  if (CU) db.collection('ratings').add({ userId: CU.uid, pro: selPro ? selPro.n : '', stars: n, at: firebase.firestore.FieldValue.serverTimestamp() });
 }

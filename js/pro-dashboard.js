@@ -294,22 +294,70 @@ async function loadAcceptedRequests() {
     snap.forEach(doc => {
       const booking = doc.data();
       const bookingId = doc.id;
+
       let statusBadge = '⏳ Aguardando pagamento';
       let statusColor = '#EAB308';
       if (booking.status === 'payment_confirmed') {
-        statusBadge = '💳 Pagamento confirmado';
+        statusBadge = '💳 Pago — pronto para iniciar';
         statusColor = '#10B981';
       } else if (booking.status === 'accepted') {
         statusBadge = '✅ Aceito — aguardando cliente';
         statusColor = '#1B65D6';
       }
 
-      const price = booking.price ? 'R$ ' + booking.price.toFixed(2) : '—';
+      const ts = booking.trackStatus || '';
       const addr = esc(booking.details && booking.details.addr ? booking.details.addr : 'Local não informado');
       const clientName = esc(booking.userName || (booking.userEmail ? booking.userEmail.split('@')[0] : 'Cliente'));
 
+      // === Tracking action area based on trackStatus ===
+      let trackSection = '';
+      if (booking.status === 'payment_confirmed') {
+        if (!ts || ts === 'paid') {
+          // Step 1: Pro can mark as on the way
+          trackSection =
+            '<div class="pro-track-box" id="trk-' + bookingId + '">' +
+              '<div class="pro-track-status">📍 Você foi aceito! Vá até o local do cliente.</div>' +
+              '<div style="display:flex;gap:8px;margin-top:10px">' +
+                '<button class="btn-track-arrive" onclick="proMarkOnWay(\'' + bookingId + '\')">🚗 A caminho</button>' +
+              '</div>' +
+            '</div>';
+        } else if (ts === 'pro_on_way') {
+          // Step 2: Enter client's arrival code
+          trackSection =
+            '<div class="pro-track-box" id="trk-' + bookingId + '">' +
+              '<div class="pro-track-status">🚗 Você está a caminho!</div>' +
+              '<div style="margin-top:10px">' +
+                '<div style="font-size:.8rem;font-weight:700;margin-bottom:6px">🔑 Chegou? Digite o código que o cliente mostrar:</div>' +
+                '<div style="display:flex;gap:6px">' +
+                  '<div style="display:flex;gap:4px">' +
+                    '<input id="pAC1-' + bookingId + '" type="text" maxlength="1" inputmode="numeric"' +
+                      ' class="trk-digit-input" oninput="pArrNext(this,1,\'' + bookingId + '\')">' +
+                    '<input id="pAC2-' + bookingId + '" type="text" maxlength="1" inputmode="numeric"' +
+                      ' class="trk-digit-input" oninput="pArrNext(this,2,\'' + bookingId + '\')">' +
+                    '<input id="pAC3-' + bookingId + '" type="text" maxlength="1" inputmode="numeric"' +
+                      ' class="trk-digit-input" oninput="pArrNext(this,3,\'' + bookingId + '\')">' +
+                    '<input id="pAC4-' + bookingId + '" type="text" maxlength="1" inputmode="numeric"' +
+                      ' class="trk-digit-input" oninput="pArrNext(this,4,\'' + bookingId + '\')">' +
+                  '</div>' +
+                  '<button class="btn-track-confirm" onclick="proVerifyArrival(\'' + bookingId + '\')">Confirmar chegada ✅</button>' +
+                '</div>' +
+                '<div id="pArrErr-' + bookingId + '" style="display:none;color:var(--red);font-size:.78rem;margin-top:6px">❌ Código incorreto. Peça ao cliente novamente.</div>' +
+              '</div>' +
+            '</div>';
+        } else if (ts === 'pro_arrived') {
+          // Step 3: Service in progress, pro can finish
+          trackSection =
+            '<div class="pro-track-box pro-track-active" id="trk-' + bookingId + '">' +
+              '<div class="pro-track-status">🔧 Serviço em andamento!</div>' +
+              '<div style="font-size:.78rem;color:var(--text2);margin-top:4px">Conclua o serviço e clique em terminar.</div>' +
+              '<button class="btn-track-finish" onclick="proFinishService(\'' + bookingId + '\')" style="margin-top:10px;width:100%">✅ Terminar serviço</button>' +
+            '</div>';
+        }
+      }
+
       const card = document.createElement('div');
       card.className = 'pro-request-card';
+      card.id = 'acc-' + bookingId;
       card.innerHTML =
         '<div style="display:flex;justify-content:space-between;align-items:start;gap:12px">' +
           '<div style="flex:1">' +
@@ -319,10 +367,11 @@ async function loadAcceptedRequests() {
             '<div style="display:inline-block;padding:4px 8px;border-radius:4px;font-size:.75rem;font-weight:700;background:' + statusColor + '22;color:' + statusColor + '">' + statusBadge + '</div>' +
           '</div>' +
           '<div style="text-align:right;flex-shrink:0;display:flex;flex-direction:column;align-items:flex-end;gap:8px">' +
-            '<div style="font-size:1.3rem;font-weight:800;color:var(--p)">' + price + '</div>' +
-            '<button class="btn-chat" onclick="openProChat(\'' + bookingId + '\')">💬 Conversar</button>' +
+            (booking.agreedPrice ? '<div style="font-size:1.3rem;font-weight:800;color:var(--p)">R$ ' + booking.agreedPrice + ',00</div>' : '') +
+            '<button class="btn-chat" onclick="openProChat(\'' + bookingId + '\')">💬 Chat</button>' +
           '</div>' +
-        '</div>';
+        '</div>' +
+        (trackSection ? '<div style="margin-top:12px;border-top:1px solid var(--border);padding-top:12px">' + trackSection + '</div>' : '');
 
       list.appendChild(card);
     });
@@ -984,4 +1033,142 @@ function sendProProposal() {
   if (gauge) gauge.innerHTML = '';
   document.getElementById('proProposeArea').style.display = 'none';
   toast('Proposta de R$ ' + val.toFixed(0) + ' enviada! Você recebe R$ ' + proReceives + ' (75%) 💰', 'ok');
+}
+
+// ====================================================================
+// === RASTREAMENTO DO SERVIÇO — LADO DO PROFISSIONAL ==================
+// ====================================================================
+
+// Input helper: move para próximo campo de código
+function pArrNext(el, i, bookingId) {
+  el.value = el.value.replace(/\D/g, '');
+  if (el.value && i < 4) {
+    const next = document.getElementById('pAC' + (i + 1) + '-' + bookingId);
+    if (next) next.focus();
+  }
+}
+
+// === MARCAR "A CAMINHO" ===
+async function proMarkOnWay(bookingId) {
+  try {
+    await db.collection('bookings').doc(bookingId).update({
+      trackStatus: 'pro_on_way',
+      onWayAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    toast('Ótimo! Cliente notificado que você está a caminho 🚗', 'ok');
+    loadAcceptedRequests();
+  } catch (e) {
+    toast('Erro ao atualizar status: ' + e.message, 'err');
+  }
+}
+
+// === VERIFICAR CÓDIGO DE CHEGADA (digitado pelo profissional) ===
+async function proVerifyArrival(bookingId) {
+  const digits = [1, 2, 3, 4].map(i => {
+    const el = document.getElementById('pAC' + i + '-' + bookingId);
+    return el ? el.value.trim() : '';
+  });
+  const code = digits.join('');
+
+  if (!/^\d{4}$/.test(code)) {
+    toast('Digite os 4 dígitos do código', 'err');
+    return;
+  }
+
+  try {
+    const snap = await db.collection('bookings').doc(bookingId).get();
+    if (!snap.exists) { toast('Pedido não encontrado', 'err'); return; }
+    const bk = snap.data();
+
+    if (!bk.arrCodeHash) {
+      toast('Código ainda não disponível. Peça ao cliente para efetuar o pagamento.', 'err');
+      return;
+    }
+
+    // Hash the entered code and compare (same salt as tracking.js)
+    const enteredHash = await hashCode(code);
+    if (enteredHash !== bk.arrCodeHash) {
+      const errEl = document.getElementById('pArrErr-' + bookingId);
+      if (errEl) errEl.style.display = 'block';
+      [1, 2, 3, 4].forEach(i => {
+        const el = document.getElementById('pAC' + i + '-' + bookingId);
+        if (el) el.value = '';
+      });
+      document.getElementById('pAC1-' + bookingId).focus();
+      return;
+    }
+
+    // Código correto → confirmar chegada
+    await db.collection('bookings').doc(bookingId).update({
+      trackStatus: 'pro_arrived',
+      arrivedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    toast('Chegada confirmada! Inicie o serviço 🔧', 'ok');
+    loadAcceptedRequests();
+
+  } catch (e) {
+    toast('Erro ao verificar código: ' + e.message, 'err');
+  }
+}
+
+// === TERMINAR SERVIÇO — mostra código de conclusão ao profissional ===
+async function proFinishService(bookingId) {
+  try {
+    const snap = await db.collection('bookings').doc(bookingId).get();
+    if (!snap.exists) { toast('Pedido não encontrado', 'err'); return; }
+    const bk = snap.data();
+
+    const compCode = bk.compCode;
+    if (!compCode) {
+      toast('Código de conclusão não disponível. Peça ao cliente para verificar o pagamento.', 'err');
+      return;
+    }
+
+    // Mostrar código de conclusão em modal dedicado
+    _showProCompCodeModal(bookingId, compCode);
+
+  } catch (e) {
+    toast('Erro ao obter código: ' + e.message, 'err');
+  }
+}
+
+// === MODAL COM CÓDIGO DE CONCLUSÃO (pro mostra ao cliente) ===
+function _showProCompCodeModal(bookingId, code) {
+  // Remove modal anterior se existir
+  const existing = document.getElementById('proCompCodeModal');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'proCompCodeModal';
+  modal.style.cssText =
+    'position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;' +
+    'justify-content:center;z-index:9999;padding:20px';
+
+  modal.innerHTML =
+    '<div style="background:var(--bg);border-radius:var(--r);padding:28px 24px;max-width:360px;width:100%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.3)">' +
+      '<div style="font-size:2rem;margin-bottom:8px">✅</div>' +
+      '<h3 style="margin:0 0 6px">Serviço concluído!</h3>' +
+      '<p style="font-size:.85rem;color:var(--text2);margin-bottom:20px">Mostre este código ao cliente para confirmar a conclusão e liberar seu pagamento:</p>' +
+      '<div style="background:linear-gradient(135deg,#059669,#10B981);border-radius:16px;padding:20px;color:#fff;margin-bottom:20px">' +
+        '<div style="font-size:.72rem;opacity:.8;margin-bottom:8px;letter-spacing:1px">CÓDIGO DE CONCLUSÃO</div>' +
+        '<div style="font-size:3rem;font-weight:800;letter-spacing:16px;font-family:monospace;' +
+          'background:rgba(255,255,255,.2);border-radius:12px;padding:12px">' +
+          esc(code) +
+        '</div>' +
+        '<div style="font-size:.72rem;opacity:.75;margin-top:8px">O cliente digita este código para liberar o pagamento</div>' +
+      '</div>' +
+      '<button onclick="_closeProCompCodeModal()" ' +
+        'style="width:100%;padding:12px;border-radius:var(--rs);background:var(--p);color:#fff;' +
+        'font-weight:700;border:none;cursor:pointer;font-size:.95rem">Fechar</button>' +
+    '</div>';
+
+  document.body.appendChild(modal);
+  modal.addEventListener('click', e => { if (e.target === modal) _closeProCompCodeModal(); });
+}
+
+function _closeProCompCodeModal() {
+  const modal = document.getElementById('proCompCodeModal');
+  if (modal) modal.remove();
+  // Reload to refresh tracking status after closing
+  loadAcceptedRequests();
 }
