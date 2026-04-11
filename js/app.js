@@ -585,14 +585,16 @@ function searchPros() {
     const street = (document.getElementById('bkStreet').value || _bkCepData.logradouro || '').trim();
     const addr = [street, num, _bkCepData.bairro, _bkCepData.localidade + '/' + _bkCepData.uf].filter(Boolean).join(', ');
     document.getElementById('bkAddr').value = addr;
-    window.bkDetails = { svc, addr, date: d, time: t, desc: document.getElementById('bkDesc').value };
+    const budget = parseFloat(document.getElementById('bkBudget').value) || null;
+    window.bkDetails = { svc, addr, date: d, time: t, desc: document.getElementById('bkDesc').value, budget };
   } else {
     const f = document.getElementById('cFrom').value.trim(), t = document.getElementById('cTo').value.trim(), d = document.getElementById('cDate').value, tm = document.getElementById('cTime').value;
     const m = []; if (!f) m.push('cidade de retirada'); if (!t) m.push('cidade de entrega'); if (!d) m.push('data'); if (!tm) m.push('horário');
     if (m.length) { toast('Preencha: ' + m.join(', '), 'err'); return; }
     const dateCheck = validateScheduleDate(d);
     if (!dateCheck.ok) { toast(dateCheck.msg, 'err'); return; }
-    window.bkDetails = { svc, from: f, to: t, date: d, time: tm };
+    const budget = parseFloat(document.getElementById('bkBudget').value) || null;
+    window.bkDetails = { svc, from: f, to: t, date: d, time: tm, budget };
   }
 
   // Se tem profissional pré-selecionado, vai direto ao chat
@@ -629,3 +631,16 @@ function searchPros() {
 }
 
 function pickPro(p, s) { selPro = p; selSvc = s; closeM('bookM'); openChat(p, s); }
+
+// === LIVE GAUGE NO FORMULÁRIO DE AGENDAMENTO ===
+function onBkBudgetInput() {
+  const val = parseFloat(document.getElementById('bkBudget').value);
+  const gauge = document.getElementById('bkBudgetGauge');
+  if (!gauge) return;
+  if (!val || val < 10) { gauge.innerHTML = ''; return; }
+  const svc = document.getElementById('bkSvc').value;
+  // getPriceGaugeHTML é definido em chat.js (carregado depois); checa disponibilidade
+  if (typeof getPriceGaugeHTML === 'function') {
+    gauge.innerHTML = getPriceGaugeHTML(val, svc, 'client');
+  }
+}
