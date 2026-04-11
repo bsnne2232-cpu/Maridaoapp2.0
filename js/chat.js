@@ -1,3 +1,73 @@
+// === REFERENCE PRICE RANGES PER SERVICE (mercado BR) ===
+const SVC_PRICE_RANGE = {
+  'Faxina':              { min: 80,  fair: 160,  max: 400  },
+  'Faxina / Diarista':   { min: 80,  fair: 160,  max: 400  },
+  'Encanamento':         { min: 120, fair: 260,  max: 700  },
+  'Elétrica':            { min: 120, fair: 260,  max: 700  },
+  'Pintura':             { min: 200, fair: 500,  max: 1800 },
+  'Montagem de móveis':  { min: 80,  fair: 180,  max: 450  },
+  'Ar-condicionado':     { min: 150, fair: 320,  max: 900  },
+  'Jardinagem':          { min: 100, fair: 210,  max: 550  },
+  'Chaveiro':            { min: 80,  fair: 160,  max: 450  },
+  'Pet Sitter':          { min: 60,  fair: 130,  max: 320  },
+  'Mudança':             { min: 300, fair: 650,  max: 2200 },
+  'Carreto':             { min: 150, fair: 320,  max: 900  },
+};
+
+// === PRICE GAUGE HTML BUILDER ===
+function getPriceGaugeHTML(price, svc, side) {
+  const range = SVC_PRICE_RANGE[svc] || { min: 60, fair: 200, max: 1000 };
+  const pct = Math.min(98, Math.max(2, ((price - range.min) / (range.max - range.min)) * 100));
+
+  let level, color, msg;
+  if (price < range.min * 0.65) {
+    level = 'Muito baixo'; color = '#EF4444';
+    msg = side === 'client'
+      ? '💡 Para um serviço de melhor qualidade, sugerimos aumentar o valor que está disposto a pagar.'
+      : '⚠️ Valor muito abaixo do mercado. Pode ser difícil encontrar clientes com este preço.';
+  } else if (price < range.min) {
+    level = 'Abaixo do mercado'; color = '#F97316';
+    msg = side === 'client'
+      ? '💡 Valor um pouco baixo para este serviço. Aumentar as chances de um bom profissional aceitar.'
+      : '💡 Valor abaixo da média do mercado. Considere revisar para atrair mais clientes.';
+  } else if (price <= range.fair) {
+    level = 'Justo'; color = '#10B981';
+    msg = '✅ Ótimo! Valor dentro da faixa esperada para este serviço.';
+  } else if (price <= range.max) {
+    level = 'Acima da média'; color = '#3B82F6';
+    msg = side === 'client'
+      ? '👍 Valor generoso — atrai profissionais de alta qualidade.'
+      : '👍 Valor competitivo — maior chance de fechar rapidamente.';
+  } else {
+    level = 'Premium'; color = '#8B5CF6';
+    msg = '💎 Valor premium — serviço de alto padrão.';
+  }
+
+  return `<div class="price-gauge">
+    <div style="display:flex;justify-content:space-between;font-size:.68rem;color:var(--text2);margin-bottom:3px">
+      <span>Muito baixo</span><span>Justo (R$${range.fair})</span><span>Alto</span>
+    </div>
+    <div class="gauge-track">
+      <div class="gauge-fill" style="width:${pct}%"></div>
+      <div class="gauge-tip" style="left:${pct}%;background:${color}"></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:3px">
+      <span style="font-size:.72rem;font-weight:700;color:${color}">${level}</span>
+      <span style="font-size:.7rem;color:var(--text2)">Ref. mercado: R$${range.min}–R$${range.max}</span>
+    </div>
+    <div class="gauge-msg" style="color:${color}">${msg}</div>
+  </div>`;
+}
+
+// === LIVE GAUGE UPDATE — CLIENT PRICE INPUT ===
+function onClientPriceInput() {
+  const val = parseFloat(document.getElementById('clientProposeVal').value);
+  const gauge = document.getElementById('clientPriceGauge');
+  if (!gauge) return;
+  if (!val || val < 10) { gauge.innerHTML = ''; return; }
+  gauge.innerHTML = getPriceGaugeHTML(val, selSvc || '', 'client');
+}
+
 // === SERVICE-SPECIFIC QUESTIONS ===
 const SQ = {
   'Faxina': '📝 Pra calcular:\n1️⃣ Casa ou apto? Quantos cômodos?\n2️⃣ Quantos andares?\n3️⃣ Tem pet?\n4️⃣ Faxina completa ou parcial?\n5️⃣ Precisa de material?',
@@ -164,13 +234,94 @@ function renderChatSnapshot(snap) {
   });
 }
 
-// === BOTÃO RÁPIDO DE ACEITAR PROPOSTA DO PRO ===
+// === CAIXA DE NEGOCIAÇÃO (3 opções) — PROPOSTA DO PRO ===
 function showQuickAccept(price) {
   if (chatSt.agreed) return;
   const qa = document.getElementById('chatQuickAccept');
   if (!qa) return;
   qa.style.display = 'block';
-  qa.innerHTML = '<button onclick="quickAcceptPrice(' + price + ')" style="width:100%;padding:12px;background:linear-gradient(135deg,#10B981,#059669);color:#fff;border:none;border-radius:var(--rs);font-weight:700;cursor:pointer;font-size:1rem;letter-spacing:.3px">✅ Aceitar R$ ' + price + ',00 e ir para pagamento</button>';
+
+  const range = SVC_PRICE_RANGE[selSvc] || { min: 60, fair: 200, max: 1000 };
+  const pct = Math.min(98, Math.max(2, ((price - range.min) / (range.max - range.min)) * 100));
+
+  let levelColor = '#10B981';
+  if (price < range.min) levelColor = '#F97316';
+  else if (price > range.max) levelColor = '#8B5CF6';
+  else if (price > range.fair) levelColor = '#3B82F6';
+
+  qa.innerHTML =
+    '<div class="nego-box">' +
+      '<div class="nego-header">' +
+        '<div style="font-size:.7rem;font-weight:700;color:var(--text2);letter-spacing:.6px;margin-bottom:6px">💰 PROPOSTA DO PROFISSIONAL</div>' +
+        '<div style="font-size:1.5rem;font-weight:800;color:var(--p)">R$ ' + price + ',00</div>' +
+        '<div style="margin-top:8px">' +
+          '<div style="display:flex;justify-content:space-between;font-size:.66rem;color:var(--text2);margin-bottom:2px"><span>Muito baixo</span><span>Justo (R$' + range.fair + ')</span><span>Alto</span></div>' +
+          '<div class="gauge-track">' +
+            '<div class="gauge-fill" style="width:' + pct + '%"></div>' +
+            '<div class="gauge-tip" style="left:' + pct + '%;background:' + levelColor + '"></div>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="nego-actions">' +
+        '<button class="nego-btn nego-accept" onclick="quickAcceptPrice(' + price + ')">✅ Aceitar</button>' +
+        '<button class="nego-btn nego-reject" onclick="rejectProposal(' + price + ')">❌ Recusar</button>' +
+        '<button class="nego-btn nego-counter" onclick="openCounterPropose(' + price + ')">💬 Contrapropor</button>' +
+      '</div>' +
+    '</div>';
+}
+
+// === RECUSAR PROPOSTA DO PRO — pede valor mínimo do cliente ===
+function rejectProposal(price) {
+  const qa = document.getElementById('chatQuickAccept');
+  if (!qa) return;
+  qa.innerHTML =
+    '<div style="padding:6px 2px">' +
+      '<div style="font-size:.82rem;font-weight:700;color:var(--text);margin-bottom:8px">❌ A partir de quanto você está disposto a pagar?</div>' +
+      '<div style="display:flex;gap:6px">' +
+        '<input type="number" id="rejectMinVal" placeholder="Ex: 120" min="10" max="10000"' +
+          ' style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:var(--rs);font-size:.9rem;background:var(--bg);color:var(--text)">' +
+        '<button onclick="sendRejectWithMin(' + price + ')"' +
+          ' style="padding:8px 14px;background:var(--p);color:#fff;border:none;border-radius:var(--rs);font-weight:700;cursor:pointer">Enviar</button>' +
+        '<button onclick="document.getElementById(\'chatQuickAccept\').style.display=\'none\'"' +
+          ' style="padding:8px 10px;background:var(--bg);border:1px solid var(--border);border-radius:var(--rs);cursor:pointer">✕</button>' +
+      '</div>' +
+    '</div>';
+}
+
+// === ENVIA RECUSA COM VALOR MÍNIMO DISPOSTO ===
+function sendRejectWithMin(originalPrice) {
+  const minVal = parseFloat(document.getElementById('rejectMinVal').value);
+  if (!minVal || minVal < 10 || minVal > 10000) { toast('Valor inválido (entre R$ 10 e R$ 10.000)', 'err'); return; }
+  const msg = '❌ Não aceito R$ ' + originalPrice + ',00. Estou disposto a pagar a partir de R$ ' + Math.round(minVal) + ',00.';
+  const seq = Date.now();
+  _pendingSeqs.add(seq);
+  addMsg(msg, 'sent');
+  db.collection('messages').add({
+    bookingId: window.currentBookingId, text: msg,
+    sender: 'user', userId: CU.uid, seq: seq,
+    at: firebase.firestore.FieldValue.serverTimestamp()
+  }).catch(() => {});
+  const qa = document.getElementById('chatQuickAccept');
+  if (qa) qa.style.display = 'none';
+  // Abre área de proposta com o valor sugerido preenchido
+  const ca = document.getElementById('chatClientProposeArea');
+  if (ca) {
+    ca.style.display = 'block';
+    const vi = document.getElementById('clientProposeVal');
+    if (vi) { vi.value = Math.round(minVal); onClientPriceInput(); }
+  }
+}
+
+// === ABRIR CONTRAPROPOSTA ===
+function openCounterPropose(price) {
+  const qa = document.getElementById('chatQuickAccept');
+  if (qa) qa.style.display = 'none';
+  const ca = document.getElementById('chatClientProposeArea');
+  if (ca) {
+    ca.style.display = 'block';
+    const vi = document.getElementById('clientProposeVal');
+    if (vi) { vi.focus(); }
+  }
 }
 
 // Aceita a proposta DIRETAMENTE — sem depender de parsing de texto em sendMsg()
@@ -211,6 +362,14 @@ function clientProposePrice() {
   const valEl = document.getElementById('clientProposeVal');
   const val = parseFloat(valEl.value);
   if (!val || val < 10 || val > 10000) { toast('Valor inválido (entre R$ 10 e R$ 10.000)', 'err'); return; }
+
+  // Aviso se valor muito baixo (abaixo de 65% do mínimo de referência)
+  const range = SVC_PRICE_RANGE[selSvc] || { min: 60, fair: 200, max: 1000 };
+  if (val < range.min * 0.65) {
+    toast('⚠️ Valor muito baixo — para um serviço de qualidade sugerimos no mínimo R$ ' + range.min, 'err');
+    return;
+  }
+
   const msg = '💰 Proponho: R$ ' + Math.round(val) + ',00';
   const seq = Date.now();
   _pendingSeqs.add(seq);
@@ -221,8 +380,10 @@ function clientProposePrice() {
     at: firebase.firestore.FieldValue.serverTimestamp()
   }).catch(e => { console.error('clientProposePrice:', e); _pendingSeqs.delete(seq); });
   valEl.value = '';
+  const gauge = document.getElementById('clientPriceGauge');
+  if (gauge) gauge.innerHTML = '';
   document.getElementById('chatClientProposeArea').style.display = 'none';
-  toast('Proposta de R$ ' + Math.round(val) + ' enviada!', 'ok');
+  toast('Proposta de R$ ' + Math.round(val) + ' enviada! 💰', 'ok');
 }
 
 // === ADD MESSAGE TO DOM ===

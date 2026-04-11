@@ -772,7 +772,7 @@ async function openProChat(bookingId) {
         div.textContent = d.text;
         m.appendChild(div);
 
-        // Detecta proposta do CLIENTE → mostra botão de aceitar para o pro
+        // Detecta proposta do CLIENTE → mostra caixa de negociação para o pro
         if (d.sender === 'user') {
           const fm = d.text.match(/Proponho[:\s]+R?\$?\s*(\d+)/i) || d.text.match(/R\$\s*(\d+)/i);
           if (fm) {
@@ -781,7 +781,7 @@ async function openProChat(bookingId) {
               const acceptArea = document.getElementById('proClientProposalAccept');
               if (acceptArea) {
                 acceptArea.style.display = 'block';
-                acceptArea.innerHTML = '<button onclick="proAcceptClientProposal(' + clientPrice + ')" style="width:100%;padding:10px;background:linear-gradient(135deg,#10B981,#059669);color:#fff;border:none;border-radius:var(--rs);font-weight:700;cursor:pointer;font-size:.9rem">✅ Aceitar proposta do cliente: R$ ' + clientPrice + ',00</button>';
+                acceptArea.innerHTML = buildProNegoBox(clientPrice);
               }
             }
           }
@@ -839,6 +839,38 @@ function sendProMsg() {
   }).catch(e => { console.error('sendProMsg error:', e); _proPendingSeqs.delete(seq); });
 }
 
+// === CONSTRÓI CAIXA DE NEGOCIAÇÃO (proposta do cliente → pro vê) ===
+function buildProNegoBox(clientPrice) {
+  const svc = (document.getElementById('proChatSvc') || {}).textContent || '';
+  const range = (typeof SVC_PRICE_RANGE !== 'undefined' && SVC_PRICE_RANGE[svc]) || { min: 60, fair: 200, max: 1000 };
+  const pct = Math.min(98, Math.max(2, ((clientPrice - range.min) / (range.max - range.min)) * 100));
+
+  let levelColor = '#10B981';
+  if (clientPrice < range.min * 0.65) levelColor = '#EF4444';
+  else if (clientPrice < range.min) levelColor = '#F97316';
+  else if (clientPrice > range.max) levelColor = '#8B5CF6';
+  else if (clientPrice > range.fair) levelColor = '#3B82F6';
+
+  return '<div class="nego-box">' +
+    '<div class="nego-header">' +
+      '<div style="font-size:.7rem;font-weight:700;color:var(--text2);letter-spacing:.6px;margin-bottom:6px">💰 PROPOSTA DO CLIENTE</div>' +
+      '<div style="font-size:1.5rem;font-weight:800;color:var(--p)">R$ ' + clientPrice + ',00</div>' +
+      '<div style="margin-top:8px">' +
+        '<div style="display:flex;justify-content:space-between;font-size:.66rem;color:var(--text2);margin-bottom:2px"><span>Muito baixo</span><span>Justo (R$' + range.fair + ')</span><span>Alto</span></div>' +
+        '<div class="gauge-track">' +
+          '<div class="gauge-fill" style="width:' + pct + '%"></div>' +
+          '<div class="gauge-tip" style="left:' + pct + '%;background:' + levelColor + '"></div>' +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="nego-actions">' +
+      '<button class="nego-btn nego-accept" onclick="proAcceptClientProposal(' + clientPrice + ')">✅ Aceitar</button>' +
+      '<button class="nego-btn nego-reject" onclick="proRejectProposal(' + clientPrice + ')">❌ Recusar</button>' +
+      '<button class="nego-btn nego-counter" onclick="proOpenCounter(' + clientPrice + ')">💬 Contrapropor</button>' +
+    '</div>' +
+  '</div>';
+}
+
 // === PRO ACEITA PROPOSTA DO CLIENTE ===
 function proAcceptClientProposal(price) {
   if (!_proChatBookingId || !CU || !currentProfessional) return;
@@ -852,13 +884,76 @@ function proAcceptClientProposal(price) {
     seq: seq,
     at: firebase.firestore.FieldValue.serverTimestamp()
   }).catch(e => { _proPendingSeqs.delete(seq); });
-  // Atualiza lastProPosal para disparar o _bookingListener do cliente
-  db.collection('bookings').doc(_proChatBookingId).update({
-    lastProPosal: price
-  }).catch(() => {});
+  db.collection('bookings').doc(_proChatBookingId).update({ lastProPosal: price }).catch(() => {});
   const acceptArea = document.getElementById('proClientProposalAccept');
   if (acceptArea) acceptArea.style.display = 'none';
   toast('Aceite enviado! Aguardando pagamento do cliente 💰', 'ok');
+}
+
+// === PRO RECUSA PROPOSTA — pede valor mínimo que aceita ===
+function proRejectProposal(clientPrice) {
+  const acceptArea = document.getElementById('proClientProposalAccept');
+  if (!acceptArea) return;
+  acceptArea.innerHTML =
+    '<div style="padding:6px 2px">' +
+      '<div style="font-size:.82rem;font-weight:700;color:var(--text);margin-bottom:8px">❌ A partir de quanto você aceitaria fazer este serviço?</div>' +
+      '<div style="display:flex;gap:6px">' +
+        '<input type="number" id="proRejectMinVal" placeholder="Ex: 200" min="10" max="10000"' +
+          ' style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:var(--rs);font-size:.9rem;background:var(--bg);color:var(--text)">' +
+        '<button onclick="proSendRejectWithMin(' + clientPrice + ')"' +
+          ' style="padding:8px 14px;background:var(--p);color:#fff;border:none;border-radius:var(--rs);font-weight:700;cursor:pointer">Enviar</button>' +
+        '<button onclick="document.getElementById(\'proClientProposalAccept\').style.display=\'none\'"' +
+          ' style="padding:8px 10px;background:var(--bg);border:1px solid var(--border);border-radius:var(--rs);cursor:pointer">✕</button>' +
+      '</div>' +
+    '</div>';
+}
+
+// === ENVIA RECUSA COM VALOR MÍNIMO DO PRO ===
+function proSendRejectWithMin(clientPrice) {
+  const minVal = parseFloat(document.getElementById('proRejectMinVal').value);
+  if (!minVal || minVal < 10 || minVal > 10000) { toast('Valor inválido', 'err'); return; }
+  const msg = '❌ Não consigo aceitar R$ ' + clientPrice + ',00. Aceito a partir de R$ ' + Math.round(minVal) + ',00.';
+  const seq = Date.now();
+  _proPendingSeqs.add(seq);
+  _proAddMsg(msg, 'sent');
+  db.collection('messages').add({
+    bookingId: _proChatBookingId, text: msg,
+    sender: 'pro', proName: currentProfessional.name, proId: CU.uid, seq: seq,
+    at: firebase.firestore.FieldValue.serverTimestamp()
+  }).catch(() => {});
+  db.collection('bookings').doc(_proChatBookingId).update({ lastProPosal: Math.round(minVal) }).catch(() => {});
+  const acceptArea = document.getElementById('proClientProposalAccept');
+  if (acceptArea) acceptArea.style.display = 'none';
+  // Abre área de proposta com o valor mínimo preenchido
+  const pa = document.getElementById('proProposeArea');
+  if (pa) {
+    pa.style.display = 'block';
+    const vi = document.getElementById('proProposeVal');
+    if (vi) { vi.value = Math.round(minVal); onProPriceInput(); }
+  }
+  toast('Recusa enviada com contra-proposta 💬', 'ok');
+}
+
+// === ABRIR CONTRAPROPOSTA (pro) ===
+function proOpenCounter(clientPrice) {
+  const acceptArea = document.getElementById('proClientProposalAccept');
+  if (acceptArea) acceptArea.style.display = 'none';
+  const pa = document.getElementById('proProposeArea');
+  if (pa) {
+    pa.style.display = 'block';
+    const vi = document.getElementById('proProposeVal');
+    if (vi) vi.focus();
+  }
+}
+
+// === LIVE GAUGE UPDATE — PRO PRICE INPUT ===
+function onProPriceInput() {
+  const val = parseFloat(document.getElementById('proProposeVal').value);
+  const gauge = document.getElementById('proPriceGauge');
+  if (!gauge) return;
+  if (!val || val < 10) { gauge.innerHTML = ''; return; }
+  const svc = (document.getElementById('proChatSvc') || {}).textContent || '';
+  gauge.innerHTML = (typeof getPriceGaugeHTML !== 'undefined') ? getPriceGaugeHTML(val, svc, 'pro') : '';
 }
 
 // === PROPOSTA DE VALOR (pro → cliente) ===
@@ -869,7 +964,6 @@ function sendProProposal() {
   if (!val || val < 10 || val > 10000) { toast('Valor inválido (entre R$ 10 e R$ 10.000)', 'err'); return; }
   const proReceives = (val * 0.75).toFixed(0);
   const msg = '💰 Proposta: R$ ' + val.toFixed(0) + ',00\n\nResponda "aceito" para confirmar!';
-  // Renderização otimista
   const seq = Date.now();
   _proPendingSeqs.add(seq);
   _proAddMsg(msg, 'sent');
@@ -882,11 +976,12 @@ function sendProProposal() {
     seq: seq,
     at: firebase.firestore.FieldValue.serverTimestamp()
   }).catch(e => { console.error('sendProProposal error:', e); _proPendingSeqs.delete(seq); });
-  // Atualiza booking com lastProPosal para sincronizar com cliente em tempo real
   db.collection('bookings').doc(_proChatBookingId).update({
     lastProPosal: Math.round(val)
   }).catch(e => console.error('update lastProPosal:', e));
   valEl.value = '';
+  const gauge = document.getElementById('proPriceGauge');
+  if (gauge) gauge.innerHTML = '';
   document.getElementById('proProposeArea').style.display = 'none';
   toast('Proposta de R$ ' + val.toFixed(0) + ' enviada! Você recebe R$ ' + proReceives + ' (75%) 💰', 'ok');
 }
