@@ -35,6 +35,11 @@ function checkAttempts(type) {
 // startTrackingFromBackend(). Quando chega aqui sem códigos, caímos no
 // fallback (útil em dev e enquanto o Worker não está deployado): chama
 // /api/generate-codes e grava direto no Firestore.
+// Gera código local de 4 dígitos (só para TEST_MODE / fallback)
+function _localRand4() {
+  return String(Math.floor(Math.random() * 10000)).padStart(4, '0');
+}
+
 async function confirmPay() {
   if (!CU) { toast('Faça login para continuar', 'err'); return; }
   if (!agreedPrice || agreedPrice <= 0) { toast('Valor inválido', 'err'); return; }
@@ -60,9 +65,17 @@ async function confirmPay() {
       throw new Error('invalid backend code payload');
     }
   } catch (_) {
-    toast('Falha de segurança ao iniciar pagamento. Tente novamente.', 'err');
-    closeM('trackM');
-    return;
+    // Se TEST_MODE está ativo (payment.js), gera códigos localmente
+    // para que o fluxo completo possa ser testado sem backend.
+    if (typeof TEST_MODE !== 'undefined' && TEST_MODE) {
+      arrCode  = _localRand4();
+      compCode = _localRand4();
+      console.warn('[TEST_MODE] códigos gerados localmente:', arrCode, compCode);
+    } else {
+      toast('Falha de segurança ao iniciar pagamento. Tente novamente.', 'err');
+      closeM('trackM');
+      return;
+    }
   }
 
   await _persistPaidBooking(arrCode, compCode);
