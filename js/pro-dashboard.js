@@ -1,7 +1,8 @@
 // === PRO DASHBOARD STATE ===
 let currentProfessional = null;
-let proRequestsListener = null;
-let proAcceptedListener = null; // real-time listener p/ bookings aceitos (pagos ou não)
+let proRequestsListener  = null;
+let proAcceptedListener  = null; // listener por proId (novos bookings)
+let proAcceptedListener2 = null; // listener por acceptedByPro (bookings legados)
 const declinedBookings = new Set();
 
 // === PERSISTÊNCIA DE RECUSAS (localStorage por pro) ===
@@ -325,29 +326,66 @@ async function loadPendingRequests() {
 }
 
 // === LOAD ACCEPTED REQUESTS (REAL-TIME) ===
-// Usa query simples por proId (UID) para evitar a necessidade de índice
-// composto no Firestore. O filtro de status é feito no cliente.
+// Usa DOIS listeners para cobrir bookings antigos (só têm acceptedByPro)
+// e novos (têm proId). Ambos fazem queries de um único campo, sem índice
+// composto. Os resultados são mesclados por ID no Map docsById.
 // onSnapshot() reage imediatamente quando o cliente paga
-// (status→payment_confirmed) ou quando o fluxo de tracking avança
-// (trackStatus→pro_on_way/pro_arrived).
+// (status→payment_confirmed) ou quando o fluxo de tracking avança.
 function loadAcceptedRequests() {
   if (!currentProfessional || !CU) return;
-  // Desinscreve listener anterior antes de criar um novo
-  if (proAcceptedListener) { proAcceptedListener(); proAcceptedListener = null; }
+
+  // Cancela listeners anteriores
+  if (proAcceptedListener)  { proAcceptedListener();  proAcceptedListener  = null; }
+  if (proAcceptedListener2) { proAcceptedListener2(); proAcceptedListener2 = null; }
 
   const activeStatuses = ['accepted', 'payment_pending', 'payment_confirmed'];
+  const docsById  = new Map(); // bookingId → doc snapshot
+  const fromProId = new Set(); // IDs cobertos pelo listener 1 (proId)
 
+  function rerender() {
+    const filtered = [...docsById.values()]
+      .filter(doc => activeStatuses.includes(doc.data().status));
+    _renderAcceptedSnapshot({
+      empty: filtered.length === 0,
+      forEach: cb => filtered.forEach(cb)
+    });
+  }
+
+  // Listener 1: bookings onde proId == uid (novos bookings)
   proAcceptedListener = db.collection('bookings')
     .where('proId', '==', CU.uid)
     .limit(30)
     .onSnapshot(snap => {
-      const activeDocs = snap.docs.filter(doc => activeStatuses.includes(doc.data().status));
-      _renderAcceptedSnapshot({
-        empty: activeDocs.length === 0,
-        forEach: cb => activeDocs.forEach(cb)
+      snap.docChanges().forEach(change => {
+        if (change.type === 'removed') {
+          docsById.delete(change.doc.id);
+          fromProId.delete(change.doc.id);
+        } else {
+          docsById.set(change.doc.id, change.doc);
+          fromProId.add(change.doc.id);
+        }
       });
-    },
-    err => console.error('accepted listener:', err));
+      rerender();
+    }, err => console.error('accepted listener (proId):', err));
+
+  // Listener 2: bookings onde acceptedByPro == nome (bookings legados sem proId)
+  if (currentProfessional.name) {
+    proAcceptedListener2 = db.collection('bookings')
+      .where('acceptedByPro', '==', currentProfessional.name)
+      .limit(30)
+      .onSnapshot(snap => {
+        snap.docChanges().forEach(change => {
+          if (change.type === 'removed') {
+            // Só remove se não está coberto pelo listener 1
+            if (!fromProId.has(change.doc.id)) docsById.delete(change.doc.id);
+          } else {
+            // Adiciona/atualiza apenas se o listener 1 não cobriu
+            if (!fromProId.has(change.doc.id)) docsById.set(change.doc.id, change.doc);
+          }
+        });
+        rerender();
+      }, err => console.error('accepted listener (name):', err));
+  }
 }
 
 function _renderAcceptedSnapshot(snap) {
@@ -909,6 +947,10 @@ function cleanupProDashboard() {
   if (proAcceptedListener) {
     proAcceptedListener();
     proAcceptedListener = null;
+  }
+  if (proAcceptedListener2) {
+    proAcceptedListener2();
+    proAcceptedListener2 = null;
   }
   if (_proChatListener) {
     _proChatListener();
