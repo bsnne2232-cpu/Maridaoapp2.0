@@ -118,19 +118,29 @@ service cloud.firestore {
 
       allow create: if isSignedIn()
         && request.resource.data.userId == request.auth.uid
-        && request.resource.data.trackStatus in ['new', 'chat']
         && !('compCode' in request.resource.data)
         && !('arrCodeHash' in request.resource.data)
         && !('paidAt' in request.resource.data);
 
-      // Cliente pode atualizar seu próprio booking para alterar detalhes/preço
-      // ANTES do pagamento. Depois que `trackStatus == paid`, bloqueamos tudo
-      // do lado cliente — só o Worker (via Admin SDK) avança o fluxo.
+      // Regras de atualização de booking:
+      // 1. Profissional aceitando pedido pendente (proId ainda é null)
+      // 2. Participante (cliente ou pro aceito) atualizando campos não-financeiros
       allow update: if isAdmin()
+        // Profissional aceitando pedido pendente (proId ainda não definido)
+        || (
+          isSignedIn()
+          && resource.data.status == 'chat'
+          && resource.data.acceptedByPro == null
+          && request.resource.data.proId == request.auth.uid
+          && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+            'compCode', 'compCodeHash', 'arrCodeHash', 'paidAt', 'commission',
+            'netToPro', 'balance', 'userId'
+          ])
+        )
+        // Participante (cliente ou pro aceito) atualizando campos não-financeiros
         || (
           isSignedIn()
           && (resource.data.userId == request.auth.uid || resource.data.proId == request.auth.uid)
-          && resource.data.trackStatus in ['new', 'chat', 'pro_on_way', 'pro_arrived']
           && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
             'compCode', 'compCodeHash', 'arrCodeHash', 'paidAt', 'commission',
             'netToPro', 'balance'
