@@ -109,11 +109,11 @@ service cloud.firestore {
     match /bookings/{id} {
       allow get: if isSignedIn() && (
         resource.data.userId == request.auth.uid
-        || resource.data.proUid == request.auth.uid
+        || resource.data.proId == request.auth.uid
         || isAdmin()
       );
       // List de bookings deve ser feita só via query com .where(userId == uid)
-      // ou (proUid == uid); caso contrário nega.
+      // ou (proId == uid); caso contrário nega.
       allow list: if isSignedIn();
 
       allow create: if isSignedIn()
@@ -129,7 +129,7 @@ service cloud.firestore {
       allow update: if isAdmin()
         || (
           isSignedIn()
-          && (resource.data.userId == request.auth.uid || resource.data.proUid == request.auth.uid)
+          && (resource.data.userId == request.auth.uid || resource.data.proId == request.auth.uid)
           && resource.data.trackStatus in ['new', 'chat', 'pro_on_way', 'pro_arrived']
           && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
             'compCode', 'compCodeHash', 'arrCodeHash', 'paidAt', 'commission',
@@ -155,7 +155,7 @@ service cloud.firestore {
       function isParticipant(bookingId) {
         return isSignedIn() && (
           booking(bookingId).userId == request.auth.uid
-          || booking(bookingId).proUid == request.auth.uid
+          || booking(bookingId).proId == request.auth.uid
         );
       }
 

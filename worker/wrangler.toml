@@ -1,0 +1,15 @@
+name = "maridaoapi"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Variáveis públicas (ajuste para o seu projeto Firebase / ambiente Asaas).
+[vars]
+FIREBASE_PROJECT_ID = "maridaoapp-cbb4e"
+ASAAS_ENV           = "sandbox"
+ALLOWED_ORIGIN      = "*"
+
+# Secrets (NÃO ficam no arquivo). Registre com:
+#   wrangler secret put FIREBASE_CLIENT_EMAIL
+#   wrangler secret put FIREBASE_PRIVATE_KEY   # cole o PEM inteiro, newlines viram \n
+#   wrangler secret put ASAAS_API_KEY

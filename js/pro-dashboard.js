@@ -1,6 +1,7 @@
 // === PRO DASHBOARD STATE ===
 let currentProfessional = null;
 let proRequestsListener = null;
+let proAcceptedListener = null; // real-time listener p/ bookings aceitos (pagos ou não)
 const declinedBookings = new Set();
 
 // === PERSISTÊNCIA DE RECUSAS (localStorage por pro) ===
@@ -322,28 +323,38 @@ async function loadPendingRequests() {
   // This is a no-op; listener does the rendering
 }
 
-// === LOAD ACCEPTED REQUESTS ===
-async function loadAcceptedRequests() {
+// === LOAD ACCEPTED REQUESTS (REAL-TIME) ===
+// Antes era um .get() único — a UI só atualizava quando o pro clicava em
+// algo. Agora usamos onSnapshot() para reagir imediatamente quando o cliente
+// paga (status→payment_confirmed) ou quando o fluxo de tracking avança
+// (trackStatus→pro_on_way/pro_arrived). Isso também é o que faz o botão
+// "🚗 A caminho" aparecer sem precisar reload.
+function loadAcceptedRequests() {
   if (!currentProfessional) return;
-  try {
-    const snap = await db.collection('bookings')
-      .where('acceptedByPro', '==', currentProfessional.name)
-      .where('status', 'in', ['accepted', 'payment_pending', 'payment_confirmed'])
-      .limit(10)
-      .get();
+  // Desinscreve listener anterior antes de criar um novo
+  if (proAcceptedListener) { proAcceptedListener(); proAcceptedListener = null; }
 
-    const list = document.getElementById('acceptedList');
-    const noEl = document.getElementById('noAccepted');
-    if (!list) return;
-    list.innerHTML = '';
+  proAcceptedListener = db.collection('bookings')
+    .where('acceptedByPro', '==', currentProfessional.name)
+    .where('status', 'in', ['accepted', 'payment_pending', 'payment_confirmed'])
+    .limit(20)
+    .onSnapshot(snap => _renderAcceptedSnapshot(snap),
+      err => console.error('accepted listener:', err));
+}
 
-    if (snap.empty) {
-      if (noEl) noEl.style.display = 'block';
-      return;
-    }
-    if (noEl) noEl.style.display = 'none';
+function _renderAcceptedSnapshot(snap) {
+  const list = document.getElementById('acceptedList');
+  const noEl = document.getElementById('noAccepted');
+  if (!list) return;
+  list.innerHTML = '';
 
-    snap.forEach(doc => {
+  if (snap.empty) {
+    if (noEl) noEl.style.display = 'block';
+    return;
+  }
+  if (noEl) noEl.style.display = 'none';
+
+  snap.forEach(doc => {
       const booking = doc.data();
       const bookingId = doc.id;
 
@@ -454,10 +465,7 @@ async function loadAcceptedRequests() {
         (trackSection ? '<div style="margin-top:12px;border-top:1px solid var(--border);padding-top:12px">' + trackSection + '</div>' : '');
 
       list.appendChild(card);
-    });
-  } catch (e) {
-    console.error('Erro ao carregar pedidos aceitos:', e);
-  }
+  });
 }
 
 // === LOAD COMPLETED REQUESTS ===
@@ -830,6 +838,10 @@ function cleanupProDashboard() {
   if (proRequestsListener) {
     proRequestsListener();
     proRequestsListener = null;
+  }
+  if (proAcceptedListener) {
+    proAcceptedListener();
+    proAcceptedListener = null;
   }
   if (_proChatListener) {
     _proChatListener();

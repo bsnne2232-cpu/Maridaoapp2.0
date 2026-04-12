@@ -1,0 +1,14 @@
+{
+  "name": "maridaoapi",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Maridão App — Cloudflare Worker (pagamento + validação + split Asaas)",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail"
+  },
+  "devDependencies": {
+    "wrangler": "^3.78.0"
+  }
+}

@@ -30,6 +30,11 @@ function checkAttempts(type) {
 }
 
 // === CONFIRM PAYMENT → START TRACKING ===
+// Fluxo preferencial: o backend (Cloudflare Worker) já devolveu os códigos
+// através de /api/process-payment e chamou este função via
+// startTrackingFromBackend(). Quando chega aqui sem códigos, caímos no
+// fallback (útil em dev e enquanto o Worker não está deployado): chama
+// /api/generate-codes e grava direto no Firestore.
 async function confirmPay() {
   if (!CU) { toast('Faça login para continuar', 'err'); return; }
   if (!agreedPrice || agreedPrice <= 0) { toast('Valor inválido', 'err'); return; }
@@ -60,39 +65,78 @@ async function confirmPay() {
     return;
   }
 
-  // Keep hashed codes in memory
+  await _persistPaidBooking(arrCode, compCode);
+  _startTrackingListener(window.currentBookingId);
+}
+
+// === START TRACKING FROM BACKEND ===
+// Chamado por payment.js quando /api/process-payment retornar 200.
+// O Worker já fez a persistência no Firestore (status=payment_confirmed,
+// arrCodeHash, compCodeHash, paidAt etc.). Aqui só avançamos a UI.
+async function startTrackingFromBackend(arrCode, compCode) {
+  if (!/^\d{4}$/.test(arrCode) || !/^\d{4}$/.test(compCode)) {
+    toast('Resposta inválida do servidor de pagamento.', 'err');
+    return;
+  }
+  closeM('payM');
+  openM('trackM');
   trackingState.arrHash = await hashCode(arrCode);
   trackingState.compHash = await hashCode(compCode);
-  _storedCompCode = compCode; // fallback for session recovery
+  _storedCompCode = compCode;
+  _codeAttempts.arr = 0; _codeAttempts.comp = 0;
+  _codeAttempts.arrLocked = false; _codeAttempts.compLocked = false;
+  _initTrackingUI(arrCode);
+  _startTrackingListener(window.currentBookingId);
+}
+
+// === PERSIST PAID BOOKING (fallback path only) ===
+// Só usado quando o Worker /api/process-payment não responde. Em produção
+// as firestore.rules NÃO permitem este update vindo do cliente — é de
+// propósito: força o time a implantar o Worker antes de aceitar pagamentos.
+async function _persistPaidBooking(arrCode, compCode) {
+  trackingState.arrHash = await hashCode(arrCode);
+  trackingState.compHash = await hashCode(compCode);
+  _storedCompCode = compCode;
   _codeAttempts.arr = 0; _codeAttempts.comp = 0;
   _codeAttempts.arrLocked = false; _codeAttempts.compLocked = false;
 
-  // Persist arrival hash + completion code in Firestore so the pro can access them
   if (window.currentBookingId) {
-    db.collection('bookings').doc(window.currentBookingId).update({
-      arrCodeHash: trackingState.arrHash,
-      compCode: compCode,           // pro reads this to show to client
-      compCodeHash: trackingState.compHash,
-      trackStatus: 'paid',
-      paidAt: firebase.firestore.FieldValue.serverTimestamp()
-    }).catch(e => console.error('tracking update:', e));
+    try {
+      await db.collection('bookings').doc(window.currentBookingId).update({
+        arrCodeHash: trackingState.arrHash,
+        compCode: compCode,           // pro reads this to show to client
+        compCodeHash: trackingState.compHash,
+        // CRÍTICO: precisa setar BOTH campos. O pro-dashboard olha `status`
+        // para decidir se renderiza a caixa de tracking; o fluxo do cliente
+        // olha `trackStatus`. Sem o `status` aqui o pro nunca via o botão
+        // "A caminho".
+        status: 'payment_confirmed',
+        trackStatus: 'paid',
+        paidAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    } catch (e) {
+      console.error('tracking update:', e);
+      toast('Erro ao persistir pagamento: ' + (e.code || e.message), 'err');
+    }
   }
+  _initTrackingUI(arrCode);
+}
 
-  // Setup initial UI
-  document.getElementById('arrCode').textContent = arrCode;
+// === INITIAL TRACKING UI ===
+function _initTrackingUI(arrCode) {
+  const arrEl = document.getElementById('arrCode');
+  if (arrEl) arrEl.textContent = arrCode;
   ['arrCodeSec', 'compSec', 'doneSec'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.display = 'none';
   });
-  document.getElementById('arrCodeSec').style.display = 'block';
-  document.getElementById('trkSteps').style.display = 'flex';
+  const arrSec = document.getElementById('arrCodeSec');
+  if (arrSec) arrSec.style.display = 'block';
+  const steps = document.getElementById('trkSteps');
+  if (steps) steps.style.display = 'flex';
   const s = document.querySelectorAll('.trk-step');
-  s.forEach(x => { x.classList.remove('done', 'now'); x.querySelector('.trk-time').textContent = '—'; });
-  s[0].classList.add('done', 'now');
-  s[0].querySelector('.trk-time').textContent = 'Agora';
-
-  // Real-time listener: reacts to pro confirming arrival
-  _startTrackingListener(window.currentBookingId);
+  s.forEach(x => { x.classList.remove('done', 'now'); const t = x.querySelector('.trk-time'); if (t) t.textContent = '—'; });
+  if (s[0]) { s[0].classList.add('done', 'now'); const t = s[0].querySelector('.trk-time'); if (t) t.textContent = 'Agora'; }
 }
 
 // === BOOKING LISTENER — advances client UI when pro acts ===
