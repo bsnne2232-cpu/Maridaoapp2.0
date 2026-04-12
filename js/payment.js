@@ -89,8 +89,20 @@ async function validateAndPay() {
       body: JSON.stringify(payload)
     }, 20000);
   } catch (e) {
+    // Sem rede / worker indisponível → cai pro fluxo legado (confirmPay()
+    // chamando /api/generate-codes). Isso mantém o app usável enquanto o
+    // /api/process-payment não está deployado.
+    console.warn('process-payment network fail, falling back:', e);
     if (btn) { btn.disabled = false; btn.textContent = 'Pagar agora →'; }
-    toast('Falha de conexão. Tente novamente.', 'err');
+    confirmPay();
+    return;
+  }
+
+  // 404 → endpoint ainda não deployado no Worker. Fallback para fluxo legado.
+  if (res.status === 404) {
+    console.warn('process-payment 404, falling back to legacy flow');
+    if (btn) { btn.disabled = false; btn.textContent = 'Pagar agora →'; }
+    confirmPay();
     return;
   }
 
@@ -103,22 +115,25 @@ async function validateAndPay() {
     } catch (_) {}
     if (res.status === 401) msg = 'Sessão expirada. Faça login novamente.';
     if (res.status === 403) msg = 'Operação não autorizada.';
+    if (res.status === 409) msg = 'Este serviço já foi pago.';
     if (res.status === 429) msg = 'Muitas tentativas. Aguarde alguns segundos.';
+    if (res.status === 502) msg = 'Gateway de pagamento indisponível. Tente novamente.';
     toast(msg, 'err');
     return;
   }
 
-  // Sucesso — o backend já gravou no Firestore (status=paid, códigos gerados,
-  // comissão calculada e registro no split Asaas). O cliente apenas avança a UI.
+  // Sucesso — o backend já gravou tudo no Firestore (status=payment_confirmed,
+  // trackStatus=paid, arrCodeHash, compCode, compCodeHash) e já chamou Asaas
+  // com o split. Aqui só avançamos a UI de tracking do cliente.
   let data = {};
   try { data = await res.json(); } catch (_) {}
   if (btn) { btn.disabled = false; btn.textContent = 'Pagar agora →'; }
-  // Se o backend tiver gerado os códigos, já os passamos para a tela de tracking.
+
   if (data && data.arrivalCode && data.completionCode && typeof startTrackingFromBackend === 'function') {
     startTrackingFromBackend(data.arrivalCode, data.completionCode);
   } else {
-    // Fallback para o fluxo atual baseado em confirmPay() (será removido
-    // quando o backend estiver 100% integrado).
+    // Backend respondeu 200 mas sem códigos? Não deveria acontecer — usa fallback.
+    console.warn('process-payment ok without codes, using legacy UI');
     confirmPay();
   }
 }
