@@ -207,6 +207,19 @@ service cloud.firestore {
     }
 
     // ---------------------------------------------------------------
+    // /saques/{id}
+    // Solicitações de saque criadas pelo Worker (via service account).
+    // O Worker cria e decrementa o saldo atomicamente — o cliente só lê.
+    // Somente admin pode atualizar (aprovar/rejeitar/marcar pago).
+    // ---------------------------------------------------------------
+    match /saques/{id} {
+      // Pro lê apenas seus próprios saques; admin lê todos
+      allow read: if isSignedIn() && (resource.data.proId == request.auth.uid || isAdmin());
+      // Escrita (create/update/delete) exclusiva do backend ou admin
+      allow write: if isAdmin();
+    }
+
+    // ---------------------------------------------------------------
     // /admin/{doc=**}
     // Coleção reservada ao painel administrativo (dashboards, logs, etc.).
     // ---------------------------------------------------------------

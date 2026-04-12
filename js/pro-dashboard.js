@@ -255,6 +255,7 @@ async function acceptRequest(bookingId) {
       acceptedByPro: currentProfessional.name,
       proEmail: currentProfessional.email,
       proId: CU.uid,
+      proDocId: currentProfessional.id,
       status: 'accepted',
       acceptedAt: firebase.firestore.FieldValue.serverTimestamp()
     };
@@ -477,10 +478,10 @@ function _renderAcceptedSnapshot(snap) {
 
 // === LOAD COMPLETED REQUESTS ===
 async function loadCompletedRequests() {
-  if (!currentProfessional) return;
+  if (!currentProfessional || !CU) return;
   try {
     const snap = await db.collection('bookings')
-      .where('acceptedByPro', '==', currentProfessional.name)
+      .where('proId', '==', CU.uid)
       .where('status', '==', 'completed')
       .limit(30)
       .get();
@@ -508,7 +509,7 @@ async function loadCompletedRequests() {
     docs.forEach(booking => {
       const completedDate = booking.completedAt ? booking.completedAt.toDate() : new Date();
       const dateStr = completedDate.toLocaleDateString('pt-BR');
-      const earned = booking.price ? (booking.price * 0.75).toFixed(2) : '—';
+      const earned = booking.price ? (booking.price * 0.92).toFixed(2) : '—';
 
       const card = document.createElement('div');
       card.className = 'pro-request-card';
@@ -520,7 +521,7 @@ async function loadCompletedRequests() {
           '</div>' +
           '<div style="text-align:right">' +
             '<div style="font-size:1.3rem;font-weight:800;color:#10B981;margin-bottom:4px">R$ ' + esc(String(earned)) + '</div>' +
-            '<div style="font-size:.75rem;color:var(--text2)">Você recebeu</div>' +
+            '<div style="font-size:.75rem;color:var(--text2)">Seu crédito (92%)</div>' +
           '</div>' +
         '</div>';
 
@@ -533,45 +534,50 @@ async function loadCompletedRequests() {
 
 // === LOAD EARNINGS DATA ===
 async function loadEarningsData() {
-  if (!currentProfessional) return;
+  if (!currentProfessional || !CU) return;
   try {
     const now = new Date();
     const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    // This month
-    const monthSnap = await db.collection('bookings')
-      .where('acceptedByPro', '==', currentProfessional.name)
-      .where('status', '==', 'completed')
+    // Query por proId para evitar índice composto
+    const snap = await db.collection('bookings')
+      .where('proId', '==', CU.uid)
       .get();
+
+    const completedDocs = [];
+    snap.forEach(doc => {
+      if (doc.data().status === 'completed') completedDocs.push({ id: doc.id, ...doc.data() });
+    });
 
     let monthEarnings = 0, monthCount = 0;
     let totalEarnings = 0, totalCount = 0;
 
-    monthSnap.forEach(doc => {
-      const d = doc.data();
-      totalEarnings += (d.price || 0) * 0.75;
+    completedDocs.forEach(d => {
+      const net = d.netToProCents ? d.netToProCents / 100 : (d.agreedPrice || d.price || 0) * 0.92;
+      totalEarnings += net;
       totalCount++;
       const at = d.completedAt ? d.completedAt.toDate() : null;
       if (at && at >= firstDay) {
-        monthEarnings += (d.price || 0) * 0.75;
+        monthEarnings += net;
         monthCount++;
       }
     });
 
-    const emEl = document.getElementById('earningsMonth');
+    const emEl  = document.getElementById('earningsMonth');
     const scmEl = document.getElementById('serviceCountMonth');
-    const etEl = document.getElementById('earningsTotal');
+    const etEl  = document.getElementById('earningsTotal');
     const sctEl = document.getElementById('serviceCountTotal');
 
-    if (emEl) emEl.textContent = 'R$ ' + monthEarnings.toFixed(2);
+    if (emEl)  emEl.textContent  = 'R$ ' + monthEarnings.toFixed(2);
     if (scmEl) scmEl.textContent = monthCount + ' serviço' + (monthCount !== 1 ? 's' : '');
-    if (etEl) etEl.textContent = 'R$ ' + totalEarnings.toFixed(2);
+    if (etEl)  etEl.textContent  = 'R$ ' + totalEarnings.toFixed(2);
     if (sctEl) sctEl.textContent = totalCount + ' serviço' + (totalCount !== 1 ? 's' : '');
 
-    // Last 10 payments (sort client-side)
-    const docs = [];
-    monthSnap.forEach(doc => docs.push({ id: doc.id, ...doc.data() }));
-    docs.sort((a, b) => {
+    // Saldo disponível para saque (do documento do profissional)
+    _renderSaqueCard();
+
+    // Últimos 10 (sort client-side)
+    completedDocs.sort((a, b) => {
       const ta = a.completedAt ? a.completedAt.toMillis() : 0;
       const tb = b.completedAt ? b.completedAt.toMillis() : 0;
       return tb - ta;
@@ -581,9 +587,11 @@ async function loadEarningsData() {
     if (!payList) return;
     payList.innerHTML = '';
 
-    docs.slice(0, 10).forEach(booking => {
-      const date = booking.completedAt ? booking.completedAt.toDate() : new Date();
-      const earned = ((booking.price || 0) * 0.75).toFixed(2);
+    completedDocs.slice(0, 10).forEach(booking => {
+      const date   = booking.completedAt ? booking.completedAt.toDate() : new Date();
+      const earned = booking.netToProCents
+        ? (booking.netToProCents / 100).toFixed(2)
+        : ((booking.agreedPrice || booking.price || 0) * 0.92).toFixed(2);
       const row = document.createElement('div');
       row.style.cssText = 'display:flex;justify-content:space-between;padding:10px;background:var(--bg2);border-radius:6px;align-items:center';
       row.innerHTML =
@@ -597,6 +605,58 @@ async function loadEarningsData() {
 
   } catch (e) {
     console.error('Erro ao carregar ganhos:', e);
+  }
+}
+
+// === RENDER SAQUE CARD ===
+function _renderSaqueCard() {
+  const container = document.getElementById('saqueSection');
+  if (!container || !currentProfessional) return;
+
+  // Lê saldo atual do objeto do profissional (atualizado pelo listener ou ao carregar)
+  const balanceCents = currentProfessional.balance || 0;
+  const balanceReais = (balanceCents / 100).toFixed(2);
+
+  container.innerHTML =
+    '<div style="background:var(--bg2);border:1.5px solid var(--border);border-radius:var(--rs);padding:16px;margin-bottom:16px">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">' +
+        '<div>' +
+          '<div style="font-size:.8rem;color:var(--text2);margin-bottom:4px">Saldo disponível para saque</div>' +
+          '<div style="font-size:2rem;font-weight:800;color:' + (balanceCents > 0 ? '#10B981' : 'var(--text2)') + '">R$ ' + balanceReais + '</div>' +
+        '</div>' +
+      '</div>' +
+      (balanceCents >= 100
+        ? '<button class="btn btn-primary" onclick="requestSaque()" id="saqueBtn" style="width:100%">🏧 Solicitar saque via PIX</button>'
+        : '<div style="font-size:.8rem;color:var(--text2);text-align:center;padding:8px">Saldo disponível após a conclusão de serviços pagos.</div>') +
+    '</div>';
+}
+
+// === SOLICITAR SAQUE ===
+async function requestSaque() {
+  if (!CU) return;
+  const btn = document.getElementById('saqueBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Solicitando...'; }
+
+  try {
+    const token = await CU.getIdToken();
+    const res = await fetch(API_URL + '/api/request-saque', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token }
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      toast(data.error || 'Erro ao solicitar saque', 'err');
+      if (btn) { btn.disabled = false; btn.textContent = '🏧 Solicitar saque via PIX'; }
+      return;
+    }
+    const valor = (data.amountCents / 100).toFixed(2);
+    toast('✅ Saque de R$ ' + valor + ' solicitado! Enviaremos para sua chave PIX em até 1 dia útil.', 'ok');
+    // Zera o saldo local e re-renderiza
+    if (currentProfessional) currentProfessional.balance = 0;
+    _renderSaqueCard();
+  } catch (e) {
+    toast('Erro ao solicitar saque: ' + e.message, 'err');
+    if (btn) { btn.disabled = false; btn.textContent = '🏧 Solicitar saque via PIX'; }
   }
 }
 
@@ -1120,7 +1180,7 @@ function sendProProposal() {
   const valEl = document.getElementById('proProposeVal');
   const val = parseFloat(valEl.value);
   if (!val || val < 10 || val > 10000) { toast('Valor inválido (entre R$ 10 e R$ 10.000)', 'err'); return; }
-  const proReceives = (val * 0.75).toFixed(0);
+  const proReceives = (val * 0.92).toFixed(0);
   const msg = '💰 Proposta: R$ ' + val.toFixed(0) + ',00\n\nResponda "aceito" para confirmar!';
   const seq = Date.now();
   _proPendingSeqs.add(seq);
@@ -1141,7 +1201,7 @@ function sendProProposal() {
   const gauge = document.getElementById('proPriceGauge');
   if (gauge) gauge.innerHTML = '';
   document.getElementById('proProposeArea').style.display = 'none';
-  toast('Proposta de R$ ' + val.toFixed(0) + ' enviada! Você recebe R$ ' + proReceives + ' (75%) 💰', 'ok');
+  toast('Proposta de R$ ' + val.toFixed(0) + ' enviada! Você recebe R$ ' + proReceives + ' (92%) 💰', 'ok');
 }
 
 // ====================================================================

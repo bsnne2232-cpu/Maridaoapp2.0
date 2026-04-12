@@ -221,8 +221,9 @@
       <div id="tab-earnings" class="pro-tab-content">
         <div style="margin-bottom:16px">
           <h4>Seus ganhos</h4>
-          <p style="color:var(--text2);font-size:.85rem">Acompanhe seus ganhos (75% do valor combinado)</p>
+          <p style="color:var(--text2);font-size:.85rem">Você recebe 92% do valor combinado. Saque via PIX quando quiser.</p>
         </div>
+        <div id="saqueSection"></div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:24px">
           <div class="earnings-card">
             <div style="color:var(--text2);font-size:.85rem">Este mês</div>
@@ -325,11 +326,11 @@
     </div><!-- /pro-dash-content -->
   </div><!-- /pro-page -->
 
-  <!-- AVISO FIXO: MERCADO PAGO + TAXA -->
+  <!-- AVISO FIXO: SAQUE + TAXA -->
   <div class="pro-payment-notice">
-    <span>💳 <strong>Pagamentos exclusivamente via Mercado Pago</strong></span>
+    <span>🏧 <strong>Saques via PIX</strong> quando quiser</span>
     <span class="pro-notice-sep">|</span>
-    <span>Taxa de plataforma: <strong>25%</strong> — você recebe <strong>75%</strong> do valor combinado</span>
+    <span>Taxa de plataforma: <strong>8%</strong> — você recebe <strong>92%</strong> do valor combinado</span>
   </div>
 
 </div><!-- /proView -->
@@ -392,7 +393,7 @@
 <div class="upload-box" id="dUpSelfie" onclick="simUpload('dUpSelfie')"><div class="ui">🤳</div><div class="ul">Selfie segurando documento *</div><div class="uh">Confirma sua identidade</div></div>
 <div class="upload-box" id="dUpAddr" onclick="simUpload('dUpAddr')"><div class="ui">🏠</div><div class="ul">Comprovante de residência *</div><div class="uh">Últimos 3 meses</div></div>
 <div class="fg"><label>Chave PIX para receber *</label><input type="text" id="dPix" placeholder="CPF, e-mail ou chave aleatória"></div>
-<label style="display:flex;gap:8px;font-size:.8rem;margin:14px 0;align-items:flex-start"><input type="checkbox" id="dTerms"><span>Concordo com os <b>Termos de Uso</b> e a cobrança de <b>25% de comissão</b> por serviço.</span></label>
+<label style="display:flex;gap:8px;font-size:.8rem;margin:14px 0;align-items:flex-start"><input type="checkbox" id="dTerms"><span>Concordo com os <b>Termos de Uso</b> e a cobrança de <b>8% de comissão</b> por serviço.</span></label>
 <button class="btn-primary btn-full" onclick="submitProDocs()">Enviar documentos e começar a trabalhar →</button>
 </div></div>
 
@@ -415,11 +416,11 @@
 <h3 style="margin-bottom:4px">📋 Termos de adesão</h3>
 <p style="color:var(--text2);font-size:.88rem;margin-bottom:16px">Leia com atenção antes de criar seu perfil.</p>
 <div style="background:var(--pl);border-radius:var(--rs);padding:16px;font-size:.85rem;line-height:1.6;max-height:320px;overflow-y:auto;margin-bottom:16px">
-<p><strong>💳 Pagamentos via Mercado Pago</strong><br>
-Todos os pagamentos realizados pelos clientes são processados exclusivamente pelo <strong>Mercado Pago</strong>. O valor é creditado em sua conta Mercado Pago em até 14 dias úteis após a conclusão do serviço.</p>
-<p><strong>📊 Taxa de plataforma: 25%</strong><br>
-O Maridão App retém <strong>25% do valor combinado</strong> a título de taxa de serviço, que cobre: processamento de pagamento, seguro básico, suporte e manutenção da plataforma. Você recebe os <strong>75% restantes</strong>.</p>
-<p><strong>Exemplo:</strong> Se você combinar R$&nbsp;200 com o cliente, você receberá R$&nbsp;150 (75%).</p>
+<p><strong>🏧 Saques via PIX</strong><br>
+Seus ganhos ficam disponíveis no seu saldo dentro do app após cada serviço concluído e pago. Você pode solicitar o saque a qualquer momento — o valor é enviado para sua chave PIX em até 1 dia útil.</p>
+<p><strong>📊 Taxa de plataforma: 8%</strong><br>
+O Maridão App retém <strong>8% do valor combinado</strong> a título de taxa de serviço, que cobre: processamento de pagamento, seguro básico, suporte e manutenção da plataforma. Você recebe os <strong>92% restantes</strong>.</p>
+<p><strong>Exemplo:</strong> Se você combinar R$&nbsp;200 com o cliente, você receberá R$&nbsp;184 (92%).</p>
 <p><strong>📄 Verificação de identidade</strong><br>
 Para começar a receber serviços, você precisará enviar RG/CNH, selfie e comprovante de endereço. A aprovação ocorre em até 24 horas.</p>
 <p><strong>⚠️ Cancelamentos</strong><br>
@@ -428,7 +429,7 @@ Cancelamentos em cima da hora podem resultar em avaliação negativa e suspensã
 </div>
 <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:.88rem;margin-bottom:16px">
 <input type="checkbox" id="proTermsCheck" style="margin-top:3px;flex-shrink:0">
-<span>Li e aceito os termos de adesão, incluindo a taxa de 25% e os pagamentos via Mercado Pago.</span>
+<span>Li e aceito os termos de adesão, incluindo a taxa de 8% e os saques via PIX.</span>
 </label>
 <button class="btn-primary btn-full" id="submitProBtn" onclick="submitPro()">Confirmar e criar perfil →</button>
 </div></div>
@@ -525,7 +526,7 @@ Cancelamentos em cima da hora podem resultar em avaliação negativa e suspensã
 </div>
 <button class="md-close" onclick="closeProChat()" style="position:static;background:none;color:var(--text2)">✕</button>
 </div>
-<div class="chat-sec">🔒 Combine tudo aqui. Após acordo, o cliente paga pelo app (Mercado Pago, taxa 25%).</div>
+<div class="chat-sec">🔒 Combine tudo aqui. Após acordo, o cliente paga pelo app (taxa 8%, você recebe 92%).</div>
 <div id="proBlindReveal" style="display:none;padding:10px 14px;border-bottom:2px solid var(--p);background:var(--pl)"></div>
 <div class="chat-msgs" id="proChatMsgs"></div>
 <div id="proClientProposalAccept" style="display:none;padding:8px 14px;border-top:2px solid var(--p);background:var(--pl)"></div>

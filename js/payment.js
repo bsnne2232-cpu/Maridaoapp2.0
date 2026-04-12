@@ -11,8 +11,8 @@ function gwFee(m, a) {
 }
 
 // === COMMISSION RATE ===
-// 10% (ajustado de 25%) — esse valor é apenas a exibição; o backend recalcula e grava.
-const MARIDAO_COMMISSION = 0.10;
+// 8% — esse valor é apenas exibição; o backend recalcula e grava.
+const MARIDAO_COMMISSION = 0.08;
 
 // ┌──────────────────────────────────────────────────────────────────────┐
 // │  TEST_MODE — mude para false quando integrar o Asaas em produção.   │

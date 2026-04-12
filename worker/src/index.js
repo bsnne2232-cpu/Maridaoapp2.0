@@ -26,7 +26,7 @@
  *   ALLOWED_ORIGIN                     ex: https://maridao.app (ou * em dev)
  */
 
-const MARIDAO_COMMISSION = 0.10;
+const MARIDAO_COMMISSION = 0.08; // 8% de comissão — profissional recebe 92%
 
 // ---------------------------------------------------------------------------
 // HANDLER
@@ -45,6 +45,7 @@ export default {
       if (url.pathname === '/api/generate-codes'  && request.method === 'POST') return withCors(await handleGenerateCodes(request, env), env);
       if (url.pathname === '/api/process-payment' && request.method === 'POST') return withCors(await handleProcessPayment(request, env), env);
       if (url.pathname === '/api/verify-code'     && request.method === 'POST') return withCors(await handleVerifyCode(request, env), env);
+      if (url.pathname === '/api/request-saque'   && request.method === 'POST') return withCors(await handleRequestSaque(request, env), env);
       return withCors(json({ error: 'not found' }, 404), env);
     } catch (e) {
       console.error('[worker]', e && e.stack || e);
@@ -305,6 +306,83 @@ async function firestorePatch(env, collection, docId, fields) {
   return res.json();
 }
 
+// Cria documento com ID gerado automaticamente pelo Firestore.
+async function firestoreCreate(env, collection, fields) {
+  const tok = await getAccessToken(env);
+  const body = { fields: Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, fsValue(v)])) };
+  const res = await fetch(firestoreBase(env) + '/' + collection, {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) throw new Error('firestore create failed: ' + (await res.text()));
+  const doc = await res.json();
+  return doc.name.split('/').pop();
+}
+
+// Busca o primeiro documento de uma coleção onde fieldPath == value.
+async function firestoreQueryOne(env, collection, fieldPath, value) {
+  const tok = await getAccessToken(env);
+  const body = {
+    structuredQuery: {
+      from: [{ collectionId: collection }],
+      where: { fieldFilter: { field: { fieldPath }, op: 'EQUAL', value: fsValue(value) } },
+      limit: 1
+    }
+  };
+  const res = await fetch(
+    'https://firestore.googleapis.com/v1/projects/' + env.FIREBASE_PROJECT_ID + '/databases/(default)/documents:runQuery',
+    { method: 'POST', headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+  );
+  if (!res.ok) throw new Error('firestore query failed: ' + (await res.text()));
+  const results = await res.json();
+  if (!results || results.length === 0 || !results[0].document) return null;
+  const doc = results[0].document;
+  const out = { id: doc.name.split('/').pop() };
+  for (const [k, v] of Object.entries(doc.fields || {})) out[k] = fsUnwrap(v);
+  return out;
+}
+
+// Incrementa atomicamente um campo numérico (inteiro) via commit API.
+async function firestoreIncrement(env, collection, docId, fieldPath, delta) {
+  const tok = await getAccessToken(env);
+  const docName = firestoreBase(env) + '/' + collection + '/' + docId;
+  const body = {
+    writes: [{
+      transform: {
+        document: docName,
+        fieldTransforms: [{ fieldPath, increment: { integerValue: String(Math.round(delta)) } }]
+      }
+    }]
+  };
+  const res = await fetch(
+    'https://firestore.googleapis.com/v1/projects/' + env.FIREBASE_PROJECT_ID + '/databases/(default)/documents:commit',
+    { method: 'POST', headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+  );
+  if (!res.ok) throw new Error('firestore increment failed: ' + (await res.text()));
+}
+
+// Executa dois writes atomicamente: cria doc em saques + decrementa balance do pro.
+async function firestoreCommitSaque(env, proDocId, saqueFields, decrementCents) {
+  const tok = await getAccessToken(env);
+  const base = firestoreBase(env);
+  const saqueId = Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b => b.toString(16).padStart(2, '0')).join('');
+  const saqueName = base + '/saques/' + saqueId;
+  const proDocName = base + '/professionals/' + proDocId;
+  const body = {
+    writes: [
+      { update: { name: saqueName, fields: Object.fromEntries(Object.entries(saqueFields).map(([k, v]) => [k, fsValue(v)])) } },
+      { transform: { document: proDocName, fieldTransforms: [{ fieldPath: 'balance', increment: { integerValue: String(-Math.round(decrementCents)) } }] } }
+    ]
+  };
+  const res = await fetch(
+    'https://firestore.googleapis.com/v1/projects/' + env.FIREBASE_PROJECT_ID + '/databases/(default)/documents:commit',
+    { method: 'POST', headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+  );
+  if (!res.ok) throw new Error('firestore commit saque failed: ' + (await res.text()));
+  return saqueId;
+}
+
 // ---------------------------------------------------------------------------
 // UTILS — código de 4 dígitos + hash SHA-256 com salt
 // ---------------------------------------------------------------------------
@@ -335,36 +413,24 @@ function validateCpfDigits(cpf) {
 }
 
 // ---------------------------------------------------------------------------
-// ASAAS — integração de split
+// ASAAS — cobrança ao cliente (sem split automático; repasse via saque)
 // ---------------------------------------------------------------------------
-async function asaasCharge(env, { amountCents, description, payerName, payerEmail, method, proPix, commissionCents }) {
+async function asaasCharge(env, { amountCents, description, payerName, payerEmail, method }) {
   if (!env.ASAAS_API_KEY) {
-    // Modo dev/sandbox sem Asaas configurado: simula uma cobrança aprovada.
-    // NUNCA habilite em produção — retorne erro se não tiver a chave.
     if (env.ASAAS_ENV === 'prod') throw new Error('Asaas not configured');
     return { id: 'mock_' + Date.now(), status: 'CONFIRMED', mocked: true };
   }
   const base = env.ASAAS_ENV === 'prod'
     ? 'https://api.asaas.com/v3'
     : 'https://sandbox.asaas.com/api/v3';
-  // NB: a criação real de cobrança no Asaas exige customerId. Em produção,
-  // você deve criar/buscar o customer antes (POST /customers). Aqui o código
-  // é um stub educativo — adapte para o seu fluxo.
   const res = await fetch(base + '/payments', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'access_token': env.ASAAS_API_KEY
-    },
+    headers: { 'Content-Type': 'application/json', 'access_token': env.ASAAS_API_KEY },
     body: JSON.stringify({
-      customer: payerEmail, // substituir pelo customerId real
+      customer: payerEmail,
       billingType: method === 'pix' ? 'PIX' : method === 'card' ? 'CREDIT_CARD' : 'BOLETO',
       value: amountCents / 100,
-      description: description,
-      split: proPix ? [{
-        walletId: proPix,               // wallet do profissional
-        fixedValue: (amountCents - commissionCents) / 100
-      }] : undefined
+      description: description
     })
   });
   if (!res.ok) {
@@ -452,36 +518,19 @@ async function handleProcessPayment(request, env) {
   }
 
   // 2) Calcula valores — SEMPRE no servidor, ignora payload
-  const amountCents = Math.round(priceReais * 100);
+  const amountCents     = Math.round(priceReais * 100);
   const commissionCents = Math.round(amountCents * MARIDAO_COMMISSION);
+  const netToProCents   = amountCents - commissionCents;
 
-  // 3) Busca dados do profissional p/ o split (PIX/wallet)
-  let proPix = null;
-  if (booking.proId) {
-    try {
-      // professionals é indexado por docId, mas proId é o uid → precisamos buscar
-      // OU, se o app já gravou proDocId no booking no momento do accept, use isso.
-      // Aqui assumimos que o dashboard grava proId = CU.uid e, em outro fluxo,
-      // grava proDocId = id do doc em /professionals. Ajuste conforme seu schema.
-      const proDocId = booking.proDocId || null;
-      if (proDocId) {
-        const pro = await firestoreGet(env, 'professionals', proDocId);
-        if (pro && pro.pix) proPix = pro.pix;
-      }
-    } catch (_) { /* best effort */ }
-  }
-
-  // 4) Cria cobrança no Asaas (ou mock em sandbox)
+  // 3) Cria cobrança no Asaas (sem split — repasse via saque manual)
   let charge;
   try {
     charge = await asaasCharge(env, {
       amountCents,
-      commissionCents,
       description: 'Maridão — ' + (booking.service || 'serviço'),
-      payerName: booking.userName || '',
+      payerName:  booking.userName  || '',
       payerEmail: booking.userEmail || '',
-      method,
-      proPix
+      method
     });
   } catch (e) {
     console.error('asaas error:', e.message);
@@ -491,29 +540,43 @@ async function handleProcessPayment(request, env) {
     return json({ error: 'payment not confirmed' }, 402);
   }
 
-  // 5) Gera e hasheia códigos
+  // 4) Gera e hasheia códigos
   const arrivalCode    = rand4();
   const completionCode = rand4();
   const arrCodeHash    = await sha256Hex(arrivalCode);
   const compCodeHash   = await sha256Hex(completionCode);
 
-  // 6) Persiste tudo no Firestore (bypass rules via service account)
+  // 5) Persiste dados do pagamento no booking
   await firestorePatch(env, 'bookings', bookingId, {
-    status: 'payment_confirmed',
-    trackStatus: 'paid',
-    paidAt: new Date(),
+    status:        'payment_confirmed',
+    trackStatus:   'paid',
+    paidAt:        new Date(),
     asaasChargeId: charge.id || null,
     paymentMethod: method,
-    amountCents: amountCents,
-    commissionCents: commissionCents,
-    netToProCents: amountCents - commissionCents,
-    arrCodeHash: arrCodeHash,
-    compCode: completionCode,   // pro lê este para mostrar ao cliente
-    compCodeHash: compCodeHash
+    amountCents,
+    commissionCents,
+    netToProCents,
+    arrCodeHash,
+    compCode:     completionCode,
+    compCodeHash
   });
 
-  // 7) Devolve códigos para o cliente exibir (arrivalCode aparece no celular
-  //    do cliente; ele mostra ao profissional quando chega).
+  // 6) Credita saldo do profissional (netToProCents) — será sacado manualmente
+  try {
+    const proDocId = booking.proDocId || null;
+    if (proDocId) {
+      await firestoreIncrement(env, 'professionals', proDocId, 'balance', netToProCents);
+    } else if (booking.proId) {
+      // Fallback: busca o documento do pro pelo uid
+      const pro = await firestoreQueryOne(env, 'professionals', 'uid', booking.proId);
+      if (pro) await firestoreIncrement(env, 'professionals', pro.id, 'balance', netToProCents);
+    }
+  } catch (e) {
+    // Não bloqueia o pagamento — saldo pode ser corrigido manualmente pelo admin
+    console.error('balance increment failed:', e.message);
+  }
+
+  // 7) Devolve códigos para o cliente exibir
   return json({
     ok: true,
     arrivalCode,
@@ -521,6 +584,42 @@ async function handleProcessPayment(request, env) {
     chargeId: charge.id || null,
     mocked: !!charge.mocked
   });
+}
+
+// --- /api/request-saque  (auth) ---
+// Profissional solicita saque do saldo acumulado.
+// Cria documento em /saques e zera o saldo atomicamente.
+async function handleRequestSaque(request, env) {
+  const auth = await verifyIdToken(request, env);
+  if (!auth.ok) return json({ error: auth.error }, auth.status);
+  if (rateLimited(request, 'saque', 3)) return json({ error: 'rate limited' }, 429);
+
+  // Busca documento do profissional pelo uid
+  const pro = await firestoreQueryOne(env, 'professionals', 'uid', auth.uid);
+  if (!pro) return json({ error: 'Profissional não encontrado' }, 404);
+
+  const balanceCents = pro.balance || 0;
+  if (balanceCents < 100) return json({ error: 'Saldo insuficiente (mínimo R$ 1,00)' }, 400);
+  if (!pro.pix) return json({ error: 'Configure sua chave PIX no perfil antes de solicitar saque' }, 400);
+
+  // Verifica se já existe saque pendente
+  const existingSaque = await firestoreQueryOne(env, 'saques', 'proId', auth.uid);
+  if (existingSaque && existingSaque.status === 'pending') {
+    return json({ error: 'Você já tem um saque pendente de R$ ' + (existingSaque.amountCents / 100).toFixed(2) + '. Aguarde o processamento.' }, 409);
+  }
+
+  // Cria saque e zera saldo atomicamente
+  const saqueId = await firestoreCommitSaque(env, pro.id, {
+    proId:      auth.uid,
+    proDocId:   pro.id,
+    proName:    pro.name    || '',
+    pixKey:     pro.pix,
+    amountCents: balanceCents,
+    status:     'pending',
+    createdAt:  new Date()
+  }, balanceCents);
+
+  return json({ ok: true, saqueId, amountCents: balanceCents });
 }
 
 // --- /api/verify-code  (auth) ---
