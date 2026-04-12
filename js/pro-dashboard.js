@@ -514,30 +514,44 @@ function _renderAcceptedSnapshot(snap) {
   });
 }
 
+// Busca bookings do profissional combinando duas queries (proId + acceptedByPro)
+// e mescla por ID para cobrir bookings antigos (sem proId) e novos.
+async function _fetchProBookings() {
+  const queries = [
+    db.collection('bookings').where('proId', '==', CU.uid).limit(50).get()
+  ];
+  if (currentProfessional.name) {
+    queries.push(
+      db.collection('bookings').where('acceptedByPro', '==', currentProfessional.name).limit(50).get()
+    );
+  }
+  const snaps = await Promise.all(queries);
+  const byId = new Map();
+  snaps.forEach(snap => snap.forEach(doc => { if (!byId.has(doc.id)) byId.set(doc.id, { id: doc.id, ...doc.data() }); }));
+  return [...byId.values()];
+}
+
 // === LOAD COMPLETED REQUESTS ===
 async function loadCompletedRequests() {
   if (!currentProfessional || !CU) return;
   try {
-    const snap = await db.collection('bookings')
-      .where('proId', '==', CU.uid)
-      .where('status', '==', 'completed')
-      .limit(30)
-      .get();
+    const allDocs = await _fetchProBookings();
 
     const list = document.getElementById('completedList');
     const noEl = document.getElementById('noCompleted');
     if (!list) return;
     list.innerHTML = '';
 
-    if (snap.empty) {
+    const completed = allDocs.filter(d => d.status === 'completed');
+
+    if (completed.length === 0) {
       if (noEl) noEl.style.display = 'block';
       return;
     }
     if (noEl) noEl.style.display = 'none';
 
-    // Sort client-side by completedAt desc (avoids composite index requirement)
-    const docs = [];
-    snap.forEach(doc => docs.push({ id: doc.id, ...doc.data() }));
+    // Sort client-side por completedAt desc
+    const docs = completed;
     docs.sort((a, b) => {
       const ta = a.completedAt ? a.completedAt.toMillis() : 0;
       const tb = b.completedAt ? b.completedAt.toMillis() : 0;
@@ -577,15 +591,9 @@ async function loadEarningsData() {
     const now = new Date();
     const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    // Query por proId para evitar índice composto
-    const snap = await db.collection('bookings')
-      .where('proId', '==', CU.uid)
-      .get();
-
-    const completedDocs = [];
-    snap.forEach(doc => {
-      if (doc.data().status === 'completed') completedDocs.push({ id: doc.id, ...doc.data() });
-    });
+    // Busca todos os bookings do pro (proId + acceptedByPro)
+    const allDocs = await _fetchProBookings();
+    const completedDocs = allDocs.filter(d => d.status === 'completed');
 
     let monthEarnings = 0, monthCount = 0;
     let totalEarnings = 0, totalCount = 0;
