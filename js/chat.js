@@ -197,10 +197,12 @@ async function openChat(p, s) {
       userName: userName,
       userEmail: CU.email || '',
       proName: p.n,
+      proId: null,
       service: s,
       details: bk,
       addr: addr,
       status: 'chat',
+      trackStatus: 'chat',
       acceptedByPro: null,
       clientBudget: bk.budget || null,
       createdAt: firebase.firestore.FieldValue.serverTimestamp()

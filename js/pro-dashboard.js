@@ -324,22 +324,29 @@ async function loadPendingRequests() {
 }
 
 // === LOAD ACCEPTED REQUESTS (REAL-TIME) ===
-// Antes era um .get() único — a UI só atualizava quando o pro clicava em
-// algo. Agora usamos onSnapshot() para reagir imediatamente quando o cliente
-// paga (status→payment_confirmed) ou quando o fluxo de tracking avança
-// (trackStatus→pro_on_way/pro_arrived). Isso também é o que faz o botão
-// "🚗 A caminho" aparecer sem precisar reload.
+// Usa query simples por proId (UID) para evitar a necessidade de índice
+// composto no Firestore. O filtro de status é feito no cliente.
+// onSnapshot() reage imediatamente quando o cliente paga
+// (status→payment_confirmed) ou quando o fluxo de tracking avança
+// (trackStatus→pro_on_way/pro_arrived).
 function loadAcceptedRequests() {
-  if (!currentProfessional) return;
+  if (!currentProfessional || !CU) return;
   // Desinscreve listener anterior antes de criar um novo
   if (proAcceptedListener) { proAcceptedListener(); proAcceptedListener = null; }
 
+  const activeStatuses = ['accepted', 'payment_pending', 'payment_confirmed'];
+
   proAcceptedListener = db.collection('bookings')
-    .where('acceptedByPro', '==', currentProfessional.name)
-    .where('status', 'in', ['accepted', 'payment_pending', 'payment_confirmed'])
-    .limit(20)
-    .onSnapshot(snap => _renderAcceptedSnapshot(snap),
-      err => console.error('accepted listener:', err));
+    .where('proId', '==', CU.uid)
+    .limit(30)
+    .onSnapshot(snap => {
+      const activeDocs = snap.docs.filter(doc => activeStatuses.includes(doc.data().status));
+      _renderAcceptedSnapshot({
+        empty: activeDocs.length === 0,
+        forEach: cb => activeDocs.forEach(cb)
+      });
+    },
+    err => console.error('accepted listener:', err));
 }
 
 function _renderAcceptedSnapshot(snap) {
