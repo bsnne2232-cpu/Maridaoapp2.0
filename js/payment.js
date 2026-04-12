@@ -14,6 +14,15 @@ function gwFee(m, a) {
 // 10% (ajustado de 25%) — esse valor é apenas a exibição; o backend recalcula e grava.
 const MARIDAO_COMMISSION = 0.10;
 
+// ┌──────────────────────────────────────────────────────────────────────┐
+// │  TEST_MODE — mude para false quando integrar o Asaas em produção.   │
+// │  Com true: pula validação de cartão, aceita qualquer método e gera  │
+// │  códigos localmente se o Worker não responder. Perfeito para testar │
+// │  o fluxo completo (pagamento → tracking → chegada → conclusão) sem  │
+// │  cobrar ninguém.                                                    │
+// └──────────────────────────────────────────────────────────────────────┘
+const TEST_MODE = true;
+
 // === UPDATE PAYMENT BREAKDOWN (DISPLAY ONLY) ===
 function updPay() {
   const g = gwFee(payMethod, agreedPrice);
@@ -61,7 +70,7 @@ async function validateAndPay() {
     method: payMethod
   };
 
-  if (payMethod === 'card') {
+  if (payMethod === 'card' && !TEST_MODE) {
     const num = (document.getElementById('cardNum').value || '').replace(/\D/g, '');
     const exp = (document.getElementById('cardExp').value || '').trim();
     const cvv = (document.getElementById('cardCvv').value || '').replace(/\D/g, '');
@@ -73,8 +82,6 @@ async function validateAndPay() {
     const expDate = new Date(2000 + yy, mm);
     if (expDate <= now) return toast('Cartão vencido', 'err');
     if (cvv.length < 3) return toast('CVV inválido', 'err');
-    // Dados do cartão vão direto pro backend tokenizar via Asaas.
-    // Nenhum dado sensível é gravado no Firestore/localStorage.
     payload.card = { number: num, exp, cvv };
   }
 
