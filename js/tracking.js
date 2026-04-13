@@ -132,6 +132,8 @@ async function _persistPaidBooking(arrCode, compCode) {
       toast('Erro ao persistir pagamento: ' + (e.code || e.message), 'err');
     }
   }
+  
+  // CORREÇÃO: Inicializa UI com o código
   _initTrackingUI(arrCode);
 }
 
@@ -200,7 +202,9 @@ function cNext(el, i) { el.value = el.value.replace(/\D/g, ''); if (el.value && 
 // === LEGACY ARRIVAL VERIFY (kept for fallback) ===
 async function verifyArr() {
   if (!checkAttempts('arr')) return;
-  const v = [1, 2, 3, 4].map(i => (document.getElementById('aI' + i).value || '').trim().replace(/\D/g, '')).join('');
+  
+  // CORREÇÃO: Remove replace(/\D/g, '') que causava perda de zeros à esquerda
+  const v = [1, 2, 3, 4].map(i => (document.getElementById('aI' + i).value || '').trim()).join('');
   const vHash = await hashCode(v);
 
   if (!trackingState.arrHash) {
@@ -208,8 +212,22 @@ async function verifyArr() {
     return;
   }
 
-  if (String(vHash).trim() === String(trackingState.arrHash).trim()) {
+  // CORREÇÃO: Comparação direta dos hashes
+  if (vHash === trackingState.arrHash) {
     document.getElementById('arrErr').style.display = 'none';
+    
+    // CORREÇÃO CRÍTICA: Atualiza status no Firebase para "em andamento"
+    if (window.currentBookingId) {
+      try {
+        await db.collection('bookings').doc(window.currentBookingId).update({
+          trackStatus: 'pro_arrived',
+          status: 'in_progress'
+        });
+      } catch (e) {
+        console.error('Erro ao atualizar status:', e);
+      }
+    }
+
     const s = document.querySelectorAll('.trk-step');
     s[2].classList.add('done'); s[2].querySelector('.trk-time').textContent = 'Confirmado';
     s[3].classList.add('done', 'now'); s[3].querySelector('.trk-time').textContent = 'Agora';
@@ -228,19 +246,23 @@ async function verifyArr() {
 async function verifyComp() {
   const vcBtn = event && event.target; if (vcBtn) { vcBtn.disabled = true; vcBtn.textContent = '⏳ Verificando...'; }
   if (!checkAttempts('comp')) { if (vcBtn) { vcBtn.disabled = false; vcBtn.textContent = '✅ Confirmar e liberar pagamento'; } return; }
-  const v = [1, 2, 3, 4].map(i => (document.getElementById('cI' + i).value || '').trim().replace(/\D/g, '')).join('');
+  
+  // CORREÇÃO: Remove replace(/\D/g, '') que causava perda de zeros à esquerda
+  const v = [1, 2, 3, 4].map(i => (document.getElementById('cI' + i).value || '').trim()).join('');
 
   // Primary: in-memory hash
   if (trackingState.compHash) {
     const vHash = await hashCode(v);
     if (vHash !== trackingState.compHash) {
       _showCompErr();
+      if (vcBtn) { vcBtn.disabled = false; vcBtn.textContent = '✅ Confirmar e liberar pagamento'; }
       return;
     }
   } else if (_storedCompCode) {
     // Fallback: direct match with forced String comparison
     if (String(v).trim() !== String(_storedCompCode).trim()) {
       _showCompErr();
+      if (vcBtn) { vcBtn.disabled = false; vcBtn.textContent = '✅ Confirmar e liberar pagamento'; }
       return;
     }
   } else {
@@ -251,13 +273,20 @@ async function verifyComp() {
         const bk = snap.data();
         if (bk.compCodeHash) {
           const vHash = await hashCode(v);
-          if (String(vHash).trim() !== String(bk.compCodeHash).trim()) { _showCompErr(); return; }
+          if (String(vHash).trim() !== String(bk.compCodeHash).trim()) { 
+            _showCompErr(); 
+            if (vcBtn) { vcBtn.disabled = false; vcBtn.textContent = '✅ Confirmar e liberar pagamento'; }
+            return; 
+          }
         } else if (bk.compCode && String(v).trim() !== String(bk.compCode).trim()) {
-          _showCompErr(); return;
+          _showCompErr();
+          if (vcBtn) { vcBtn.disabled = false; vcBtn.textContent = '✅ Confirmar e liberar pagamento'; }
+          return;
         }
       }
     } catch (_) {
       toast('Erro ao verificar código.', 'err');
+      if (vcBtn) { vcBtn.disabled = false; vcBtn.textContent = '✅ Confirmar e liberar pagamento'; }
       return;
     }
   }
@@ -290,6 +319,7 @@ async function verifyComp() {
   document.getElementById('doneSec').style.display = 'block';
   toast('Concluído! Pagamento liberado! 🎉', 'ok');
   _codeAttempts.comp = 0;
+  if (vcBtn) { vcBtn.disabled = false; vcBtn.textContent = '✅ Confirmar e liberar pagamento'; }
 }
 
 function _showCompErr() {
