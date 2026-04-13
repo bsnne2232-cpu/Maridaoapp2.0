@@ -212,10 +212,15 @@ async function openChat(p, s) {
     // Escuta documento de booking para capturar proposta do profissional em tempo real
     // e detectar quando o profissional definiu seu preço (negociação a cegas)
     _bookingListener = db.collection('bookings').doc(ref.id).onSnapshot(snap => {
-      if (!snap.exists || chatSt.agreed) return;
+      if (!snap.exists) return;
       const bk = snap.data();
 
-      // === NEGOCIAÇÃO A CEGAS: revela quando ambos definiram preço ===
+      // === SINCRONIZAÇÃO DE STATUS PÓS-PAGAMENTO ===
+      _updateClientChatStatus(bk);
+
+      // === NEGOCIAÇÃO (só antes de acordar preço) ===
+      if (chatSt.agreed) return;
+
       if (bk.clientBudget && bk.proBudget && !chatSt.blindRevealed) {
         chatSt.blindRevealed = true;
         showBlindNegoReveal(bk.clientBudget, bk.proBudget, s, 'client');
@@ -223,7 +228,6 @@ async function openChat(p, s) {
 
       if (bk.lastProPosal && bk.lastProPosal !== _lastProPrice) {
         _lastProPrice = bk.lastProPosal;
-        // Só mostra proposta rápida se reveal já foi dispensado
         if (chatSt.blindRevealed && chatSt.revealDismissed) showQuickAccept(_lastProPrice);
       }
       if (bk.agreedPrice) {
@@ -232,8 +236,11 @@ async function openChat(p, s) {
         if (qa) qa.style.display = 'none';
         const br = document.getElementById('chatBlindReveal');
         if (br) br.style.display = 'none';
-        document.getElementById('chatPay').classList.add('show');
-        document.getElementById('cpPrice').textContent = 'R$ ' + bk.agreedPrice + ',00';
+        // Só mostra botão de pagamento se ainda não pagou
+        if (bk.status !== 'payment_confirmed' && bk.status !== 'completed') {
+          document.getElementById('chatPay').classList.add('show');
+          document.getElementById('cpPrice').textContent = 'R$ ' + bk.agreedPrice + ',00';
+        }
       }
     }, err => console.error('booking listener:', err));
 
@@ -638,6 +645,37 @@ function clientProposePrice() {
   toast('Proposta de R$ ' + Math.round(val) + ' enviada! 💰', 'ok');
 }
 
+// === CLIENT CHAT STATUS BANNER (reage a mudanças de status do booking) ===
+function _updateClientChatStatus(bk) {
+  const banner = document.getElementById('chatStatusBanner');
+  if (!banner) return;
+
+  if (bk.status === 'payment_confirmed' || bk.trackStatus === 'paid' || bk.trackStatus === 'pro_on_way' || bk.trackStatus === 'pro_arrived' || bk.trackStatus === 'completed') {
+    // Esconde botão de pagamento quando já pago
+    document.getElementById('chatPay').classList.remove('show');
+
+    if (bk.trackStatus === 'completed') {
+      banner.style.display = 'block';
+      banner.style.background = '#D1FAE5'; banner.style.color = '#065F46';
+      banner.innerHTML = '<div style="display:flex;align-items:center;gap:8px">🎉 <span><strong>Serviço concluído!</strong> Pagamento liberado.</span></div>';
+    } else if (bk.trackStatus === 'pro_arrived') {
+      banner.style.display = 'block';
+      banner.style.background = '#DBEAFE'; banner.style.color = '#1D4ED8';
+      banner.innerHTML = '<div style="display:flex;align-items:center;gap:8px">🔧 <span><strong>Serviço em andamento!</strong> Profissional confirmou a chegada.</span></div>';
+    } else if (bk.trackStatus === 'pro_on_way') {
+      banner.style.display = 'block';
+      banner.style.background = '#FFF7ED'; banner.style.color = '#C2410C';
+      banner.innerHTML = '<div style="display:flex;align-items:center;gap:8px">🚗 <span><strong>Profissional a caminho!</strong> Pagamento aprovado.</span></div>';
+    } else {
+      banner.style.display = 'block';
+      banner.style.background = '#D1FAE5'; banner.style.color = '#065F46';
+      banner.innerHTML = '<div style="display:flex;align-items:center;gap:8px">💳 <span><strong>Pagamento aprovado!</strong> Aguardando profissional.</span></div>';
+    }
+  } else {
+    banner.style.display = 'none';
+  }
+}
+
 // === ADD MESSAGE TO DOM ===
 function addMsg(t, c) {
   const d = document.createElement('div'); d.className = 'cmsg ' + c; d.textContent = t;
@@ -711,6 +749,8 @@ async function reopenClientChat(bookingId, proName, proIcon) {
   document.getElementById('chatPay').classList.remove('show');
   const qa = document.getElementById('chatQuickAccept');
   if (qa) qa.style.display = 'none';
+  const banner = document.getElementById('chatStatusBanner');
+  if (banner) banner.style.display = 'none';
   closeM('clientChatsM');
   openM('chatM');
 
@@ -724,10 +764,15 @@ async function reopenClientChat(bookingId, proName, proIcon) {
         chatSt.blindRevealed = true;
         showBlindNegoReveal(bk.clientBudget, bk.proBudget, bk.service || selSvc, 'client');
       }
-      if (bk.agreedPrice && bk.status !== 'completed') {
+      if (bk.agreedPrice) {
         chatSt.agreed = true; chatSt.price = bk.agreedPrice; agreedPrice = bk.agreedPrice;
-        document.getElementById('chatPay').classList.add('show');
-        document.getElementById('cpPrice').textContent = 'R$ ' + bk.agreedPrice + ',00';
+        if (bk.status === 'payment_confirmed' || bk.status === 'completed') {
+          // Já pago: mostra banner de status em vez do botão de pagamento
+          _updateClientChatStatus(bk);
+        } else {
+          document.getElementById('chatPay').classList.add('show');
+          document.getElementById('cpPrice').textContent = 'R$ ' + bk.agreedPrice + ',00';
+        }
       }
       selSvc = bk.service || '';
       if (!selPro) selPro = { n: proName || '', e: proIcon || '🔧', p: 100 };
@@ -744,8 +789,13 @@ async function reopenClientChat(bookingId, proName, proIcon) {
 
   // Escuta documento de booking para capturar proposta do profissional em tempo real
   _bookingListener = db.collection('bookings').doc(bookingId).onSnapshot(snap => {
-    if (!snap.exists || chatSt.agreed) return;
+    if (!snap.exists) return;
     const bk = snap.data();
+
+    // Sincronização de status pós-pagamento
+    _updateClientChatStatus(bk);
+
+    if (chatSt.agreed) return;
     if (bk.lastProPosal && bk.lastProPosal !== _lastProPrice) {
       _lastProPrice = bk.lastProPosal;
       showQuickAccept(_lastProPrice);
@@ -754,91 +804,180 @@ async function reopenClientChat(bookingId, proName, proIcon) {
       chatSt.agreed = true; chatSt.price = bk.agreedPrice; agreedPrice = bk.agreedPrice;
       const qa = document.getElementById('chatQuickAccept');
       if (qa) qa.style.display = 'none';
-      document.getElementById('chatPay').classList.add('show');
-      document.getElementById('cpPrice').textContent = 'R$ ' + bk.agreedPrice + ',00';
+      if (bk.status !== 'payment_confirmed' && bk.status !== 'completed') {
+        document.getElementById('chatPay').classList.add('show');
+        document.getElementById('cpPrice').textContent = 'R$ ' + bk.agreedPrice + ',00';
+      }
     }
   }, err => console.error('reopen booking listener:', err));
 }
 
-// === CARREGAR CHATS DO CLIENTE ===
+// === CARREGAR SERVIÇOS DO CLIENTE (com abas e listener real-time) ===
+let _clientBookingsListener = null;
+let _clientBookingsActiveTab = 'pagos';
+
+function closeClientChatsM() {
+  if (_clientBookingsListener) { _clientBookingsListener(); _clientBookingsListener = null; }
+  closeM('clientChatsM');
+}
+
 async function showMyBookings() {
-  if (!CU) { openM('loginM'); toast('Faça login para ver seus chats', 'err'); return; }
+  if (!CU) { openM('loginM'); toast('Faça login para ver seus serviços', 'err'); return; }
   openM('clientChatsM');
   const list = document.getElementById('clientChatsList');
   list.innerHTML = '<div style="text-align:center;padding:32px;color:var(--text2)">⏳ Carregando...</div>';
 
-  try {
-    const snap = await db.collection('bookings')
-      .where('userId', '==', CU.uid)
-      .limit(50)
-      .get();
+  // Limpa listener anterior
+  if (_clientBookingsListener) { _clientBookingsListener(); _clientBookingsListener = null; }
 
-    if (snap.empty) {
-      list.innerHTML = '<div style="text-align:center;padding:32px;color:var(--text2)">😴 Nenhum chat ainda.<br>Agende um serviço para começar!</div>';
-      return;
-    }
-
-    // Ordena por data decrescente client-side
-    const docs = [];
-    snap.forEach(doc => docs.push({ id: doc.id, ...doc.data() }));
-    docs.sort((a, b) => {
-      const ta = a.createdAt ? a.createdAt.toMillis() : 0;
-      const tb = b.createdAt ? b.createdAt.toMillis() : 0;
-      return tb - ta;
+  // Listener real-time: atualiza abas automaticamente quando status muda
+  _clientBookingsListener = db.collection('bookings')
+    .where('userId', '==', CU.uid)
+    .limit(50)
+    .onSnapshot(snap => {
+      _renderClientBookings(snap);
+    }, err => {
+      console.error('client bookings listener:', err);
+      list.innerHTML = '<div style="text-align:center;padding:32px;color:var(--red)">❌ Erro ao carregar serviços.</div>';
     });
+}
 
-    // Filtra: remove recusados e chats sem acordo com mais de 4 horas
-    const filtered = docs.filter(bk => {
-      if (bk.declinedBy && bk.declinedBy.length > 0) return false;
-      if (bk.agreedPrice) return true;
-      if (['accepted', 'payment_pending', 'payment_confirmed', 'completed'].includes(bk.status)) return true;
-      // Chats em aberto: só mostrar se criados há menos de 4 horas
-      const ts = bk.createdAt ? bk.createdAt.toMillis() : 0;
-      return Date.now() - ts < 4 * 60 * 60 * 1000;
-    });
+function _renderClientBookings(snap) {
+  const list = document.getElementById('clientChatsList');
+  if (!list) return;
 
-    if (filtered.length === 0) {
-      list.innerHTML = '<div style="text-align:center;padding:32px;color:var(--text2)">😴 Nenhum serviço ativo ainda.<br>Agende um serviço para começar!</div>';
-      return;
-    }
-
-    list.innerHTML = '';
-    for (const bk of filtered) {
-      const card = document.createElement('div');
-      card.style.cssText = 'border:1px solid var(--border);border-radius:var(--rs);padding:14px;cursor:pointer;transition:all .2s;background:var(--bg2)';
-      card.onmouseover = () => card.style.borderColor = 'var(--p)';
-      card.onmouseout = () => card.style.borderColor = '';
-
-      const date = bk.createdAt ? bk.createdAt.toDate() : new Date();
-      const dateStr = date.toLocaleDateString('pt-BR') + ' ' + date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-
-      let statusLabel = '💬 Em aberto';
-      let statusColor = '#3B82F6';
-      if (bk.status === 'accepted' || bk.status === 'payment_pending') { statusLabel = '✅ Aceito'; statusColor = '#10B981'; }
-      else if (bk.status === 'payment_confirmed') { statusLabel = '💳 Pago'; statusColor = '#059669'; }
-      else if (bk.status === 'completed') { statusLabel = '🏆 Concluído'; statusColor = '#6B7280'; }
-
-      const addr = (bk.details && bk.details.addr) || bk.addr || '';
-      const svc = (bk.details && bk.details.svc) || bk.service || 'Serviço';
-
-      card.innerHTML =
-        '<div style="display:flex;justify-content:space-between;align-items:start;gap:8px">' +
-          '<div style="flex:1;min-width:0">' +
-            '<div style="font-weight:700;margin-bottom:4px">' + esc(svc) + '</div>' +
-            '<div style="font-size:.82rem;color:var(--text2);margin-bottom:4px">🔧 ' + esc(bk.proName || 'Aguardando profissional') + '</div>' +
-            (addr ? '<div style="font-size:.78rem;color:var(--text2)">📍 ' + esc(addr) + '</div>' : '') +
-          '</div>' +
-          '<div style="text-align:right;flex-shrink:0">' +
-            '<div style="font-size:.72rem;padding:3px 8px;border-radius:20px;font-weight:700;background:' + statusColor + '22;color:' + statusColor + ';margin-bottom:6px">' + statusLabel + '</div>' +
-            '<div style="font-size:.72rem;color:var(--text2)">' + esc(dateStr) + '</div>' +
-          '</div>' +
-        '</div>';
-
-      card.onclick = () => reopenClientChat(bk.id, bk.proName || 'Profissional', '🔧');
-      list.appendChild(card);
-    }
-  } catch (e) {
-    list.innerHTML = '<div style="text-align:center;padding:32px;color:var(--red)">❌ Erro ao carregar chats. Tente novamente.</div>';
-    console.error('showMyBookings:', e);
+  if (snap.empty) {
+    list.innerHTML = '<div style="text-align:center;padding:32px;color:var(--text2)">😴 Nenhum serviço ainda.<br>Agende um serviço para começar!</div>';
+    return;
   }
+
+  const docs = [];
+  snap.forEach(doc => docs.push({ id: doc.id, ...doc.data() }));
+  docs.sort((a, b) => {
+    const ta = a.createdAt ? a.createdAt.toMillis() : 0;
+    const tb = b.createdAt ? b.createdAt.toMillis() : 0;
+    return tb - ta;
+  });
+
+  // Filtra: remove recusados e chats sem acordo com mais de 4 horas
+  const filtered = docs.filter(bk => {
+    if (bk.declinedBy && bk.declinedBy.length > 0) return false;
+    if (bk.agreedPrice) return true;
+    if (['accepted', 'payment_pending', 'payment_confirmed', 'completed'].includes(bk.status)) return true;
+    const ts = bk.createdAt ? bk.createdAt.toMillis() : 0;
+    return Date.now() - ts < 4 * 60 * 60 * 1000;
+  });
+
+  if (filtered.length === 0) {
+    list.innerHTML = '<div style="text-align:center;padding:32px;color:var(--text2)">😴 Nenhum serviço ativo.<br>Agende um serviço para começar!</div>';
+    return;
+  }
+
+  // Agrupa por categoria
+  const cats = {
+    pagos: filtered.filter(bk => bk.status === 'payment_confirmed' && bk.trackStatus !== 'pro_arrived' && bk.trackStatus !== 'completed'),
+    andamento: filtered.filter(bk => bk.trackStatus === 'pro_arrived'),
+    chats: filtered.filter(bk => ['chat', 'accepted', 'payment_pending'].includes(bk.status)),
+    finalizados: filtered.filter(bk => bk.status === 'completed')
+  };
+
+  // Aba ativa: mantém a seleção atual ou escolhe a primeira não-vazia
+  let tab = _clientBookingsActiveTab;
+  if (!cats[tab] || cats[tab].length === 0) {
+    if (cats.pagos.length > 0) tab = 'pagos';
+    else if (cats.andamento.length > 0) tab = 'andamento';
+    else if (cats.chats.length > 0) tab = 'chats';
+    else tab = 'finalizados';
+  }
+
+  list.innerHTML = '';
+
+  // Abas
+  const tabs = document.createElement('div');
+  tabs.style.cssText = 'display:flex;gap:4px;margin-bottom:14px;overflow-x:auto;padding-bottom:4px';
+  const tabDefs = [
+    { key: 'pagos', label: '💳 Pagos', count: cats.pagos.length },
+    { key: 'andamento', label: '🔧 Em Andamento', count: cats.andamento.length },
+    { key: 'chats', label: '💬 Chats', count: cats.chats.length },
+    { key: 'finalizados', label: '🏆 Finalizados', count: cats.finalizados.length }
+  ];
+  tabDefs.forEach(td => {
+    const btn = document.createElement('button');
+    btn.className = 'cli-tab-btn' + (td.key === tab ? ' active' : '');
+    btn.dataset.tab = td.key;
+    btn.textContent = td.label + (td.count > 0 ? ' (' + td.count + ')' : '');
+    btn.style.cssText = 'padding:6px 12px;border-radius:20px;font-size:.75rem;font-weight:700;border:1.5px solid var(--border);background:' + (td.key === tab ? 'var(--p)' : 'var(--bg)') + ';color:' + (td.key === tab ? '#fff' : 'var(--text2)') + ';cursor:pointer;white-space:nowrap;transition:all .2s';
+    btn.onclick = () => _switchClientTab(td.key);
+    tabs.appendChild(btn);
+  });
+  list.appendChild(tabs);
+
+  // Conteúdo das abas
+  tabDefs.forEach(td => {
+    const container = document.createElement('div');
+    container.id = 'cli-tab-' + td.key;
+    container.style.cssText = 'display:' + (td.key === tab ? 'flex' : 'none') + ';flex-direction:column;gap:10px';
+    if (cats[td.key].length === 0) {
+      container.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text2);font-size:.85rem">Nenhum serviço nesta categoria</div>';
+    } else {
+      cats[td.key].forEach(bk => container.appendChild(_buildClientBookingCard(bk, td.key)));
+    }
+    list.appendChild(container);
+  });
+}
+
+function _switchClientTab(tab) {
+  _clientBookingsActiveTab = tab;
+  document.querySelectorAll('.cli-tab-btn').forEach(btn => {
+    const active = btn.dataset.tab === tab;
+    btn.classList.toggle('active', active);
+    btn.style.background = active ? 'var(--p)' : 'var(--bg)';
+    btn.style.color = active ? '#fff' : 'var(--text2)';
+  });
+  ['pagos', 'andamento', 'chats', 'finalizados'].forEach(key => {
+    const el = document.getElementById('cli-tab-' + key);
+    if (el) el.style.display = key === tab ? 'flex' : 'none';
+  });
+}
+
+function _buildClientBookingCard(bk, category) {
+  const card = document.createElement('div');
+  card.style.cssText = 'border:1px solid var(--border);border-radius:var(--rs);padding:14px;cursor:pointer;transition:all .2s;background:var(--bg2)';
+  card.onmouseover = () => card.style.borderColor = 'var(--p)';
+  card.onmouseout = () => card.style.borderColor = '';
+
+  const date = bk.createdAt ? bk.createdAt.toDate() : new Date();
+  const dateStr = date.toLocaleDateString('pt-BR') + ' ' + date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+  let statusLabel, statusColor;
+  if (category === 'pagos') {
+    statusLabel = bk.trackStatus === 'pro_on_way' ? '🚗 A caminho' : '💳 Aguardando profissional';
+    statusColor = bk.trackStatus === 'pro_on_way' ? '#F97316' : '#059669';
+  } else if (category === 'andamento') {
+    statusLabel = '🔧 Em andamento'; statusColor = '#3B82F6';
+  } else if (category === 'finalizados') {
+    statusLabel = '🏆 Concluído'; statusColor = '#6B7280';
+  } else {
+    if (bk.status === 'accepted' || bk.status === 'payment_pending') { statusLabel = '✅ Aceito'; statusColor = '#10B981'; }
+    else { statusLabel = '💬 Em aberto'; statusColor = '#3B82F6'; }
+  }
+
+  const addr = (bk.details && bk.details.addr) || bk.addr || '';
+  const svc = (bk.details && bk.details.svc) || bk.service || 'Serviço';
+
+  card.innerHTML =
+    '<div style="display:flex;justify-content:space-between;align-items:start;gap:8px">' +
+      '<div style="flex:1;min-width:0">' +
+        '<div style="font-weight:700;margin-bottom:4px">' + esc(svc) + '</div>' +
+        '<div style="font-size:.82rem;color:var(--text2);margin-bottom:4px">🔧 ' + esc(bk.proName || 'Aguardando profissional') + '</div>' +
+        (addr ? '<div style="font-size:.78rem;color:var(--text2)">📍 ' + esc(addr) + '</div>' : '') +
+      '</div>' +
+      '<div style="text-align:right;flex-shrink:0">' +
+        '<div style="font-size:.72rem;padding:3px 8px;border-radius:20px;font-weight:700;background:' + statusColor + '22;color:' + statusColor + ';margin-bottom:6px">' + statusLabel + '</div>' +
+        '<div style="font-size:.72rem;color:var(--text2)">' + esc(dateStr) + '</div>' +
+      '</div>' +
+    '</div>';
+
+  card.onclick = () => reopenClientChat(bk.id, bk.proName || 'Profissional', '🔧');
+  return card;
 }

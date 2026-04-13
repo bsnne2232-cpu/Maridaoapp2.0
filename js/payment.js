@@ -3,10 +3,10 @@
 // (Cloudflare Worker) antes de qualquer debito — o cliente NUNCA pode mexer no valor final.
 function gwFee(m, a) {
   if (m === 'card') {
-    if (a >= 200) return { r: .03, l: 'cartão 3%', f: a * .03 };
-    return { r: .0499, l: 'cartão ~5%', f: a * .0499 };
+    if (a >= 200) return { r: .03, l: 'cartão 3%', f: Math.round(a * .03 * 100) / 100 };
+    return { r: .0499, l: 'cartão ~5%', f: Math.round(a * .0499 * 100) / 100 };
   }
-  if (m === 'pix') return { r: .0099, l: 'PIX ~1%', f: a * .0099 };
+  if (m === 'pix') return { r: .0099, l: 'PIX ~1%', f: Math.round(a * .0099 * 100) / 100 };
   return { r: 0, l: 'boleto R$3,49', f: 3.49 };
 }
 
@@ -26,9 +26,9 @@ const TEST_MODE = true;
 // === UPDATE PAYMENT BREAKDOWN (DISPLAY ONLY) ===
 function updPay() {
   const g = gwFee(payMethod, agreedPrice);
-  const cl = agreedPrice + g.f;
-  const cm = agreedPrice * MARIDAO_COMMISSION;
-  const nt = agreedPrice * (1 - MARIDAO_COMMISSION);
+  const cl = Math.round((agreedPrice + g.f) * 100) / 100;
+  const cm = Math.round(agreedPrice * MARIDAO_COMMISSION * 100) / 100;
+  const nt = Math.round(agreedPrice * (1 - MARIDAO_COMMISSION) * 100) / 100;
   document.getElementById('pyTotal').textContent = 'R$ ' + agreedPrice.toFixed(2);
   document.getElementById('pyCliSvc').textContent = 'R$ ' + agreedPrice.toFixed(2);
   document.getElementById('pyGwLbl').textContent = '(' + g.l + ')';
