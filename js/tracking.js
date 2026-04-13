@@ -196,7 +196,7 @@ async function checkPendingPayment() {
 }
 
 // === ARRIVAL CODE INPUTS ===
-function aNext(el, i) { el.value = el.value.replace(/\D/g, ''); if (el.value && i < 4) document.getElementById('aI' + (i + 1)).focus(); }
+function aNext(el, i) { el.value = el.value.trim(); if (el.value && i < 4) document.getElementById('aI' + (i + 1)).focus(); }
 function cNext(el, i) { el.value = el.value.replace(/\D/g, ''); if (el.value && i < 4) document.getElementById('cI' + (i + 1)).focus(); }
 
 // === LEGACY ARRIVAL VERIFY (kept for fallback) ===

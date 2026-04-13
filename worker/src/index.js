@@ -634,8 +634,8 @@ async function handleVerifyCode(request, env) {
   try { body = await request.json(); } catch (_) { return json({ error: 'bad json' }, 400); }
   const bookingId = String(body.bookingId || '').trim();
   const type      = body.type; // 'arrival' | 'completion'
-  // Trim + force string para evitar espaços invisíveis do teclado mobile
-  const code      = String(body.code || '').trim().replace(/\D/g, '');
+// Trim + force string para preservar zeros iniciais (ex: 0123)
+  const code      = String(body.code || '').trim();
   if (!bookingId || !/^(arrival|completion)$/.test(type) || !/^\d{4}$/.test(code)) {
     return json({ error: 'bad payload' }, 400);
   }
