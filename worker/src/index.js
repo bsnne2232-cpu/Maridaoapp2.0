@@ -477,7 +477,39 @@ async function handleGenerateCodes(request, env) {
   const auth = await verifyIdToken(request, env);
   if (!auth.ok) return json({ error: auth.error }, auth.status);
   if (rateLimited(request, 'gen', 20)) return json({ error: 'rate limited' }, 429);
-  return json({ arrivalCode: rand4(), completionCode: rand4() });
+
+  let body = {};
+  try { body = await request.json(); } catch (_) {}
+
+  const bookingId = String(body.bookingId || '').trim();
+
+  const arrivalCode    = rand4();
+  const completionCode = rand4();
+
+  // Se bookingId foi fornecido, grava hashes + status no Firestore
+  // via service account (bypassa firestore.rules), igual ao process-payment.
+  if (bookingId) {
+    try {
+      const booking = await firestoreGet(env, 'bookings', bookingId);
+      if (booking && booking.userId === auth.uid) {
+        const arrCodeHash  = await sha256Hex(arrivalCode);
+        const compCodeHash = await sha256Hex(completionCode);
+        await firestorePatch(env, 'bookings', bookingId, {
+          status:      'payment_confirmed',
+          trackStatus: 'paid',
+          paidAt:      new Date(),
+          arrCodeHash,
+          compCode:    completionCode,
+          compCodeHash
+        });
+      }
+    } catch (e) {
+      // Não bloqueia — retorna os códigos mesmo se o patch falhar.
+      console.error('generate-codes firestore patch failed:', e.message);
+    }
+  }
+
+  return json({ arrivalCode, completionCode });
 }
 
 // --- /api/process-payment  (auth) ---

@@ -52,7 +52,7 @@ async function confirmPay() {
     const res = await safeFetch(API_URL + '/api/generate-codes', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: CU.uid })
+      body: JSON.stringify({ userId: CU.uid, bookingId: window.currentBookingId || '' })
     }, 12000);
 
     if (!res.ok) throw new Error('generate-codes failed');
