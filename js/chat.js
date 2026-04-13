@@ -219,7 +219,19 @@ async function openChat(p, s) {
       _updateClientChatStatus(bk);
 
       // === NEGOCIAÇÃO (só antes de acordar preço) ===
-      if (chatSt.agreed) return;
+      if (chatSt.agreed) {
+        // Pós-pagamento: bloqueia envio de novas propostas permanentemente
+        _lockNegotiationUI(bk);
+        return;
+      }
+
+      // AUTO-ACORDO: quando clientBudget === proBudget, fecha automaticamente
+      if (bk.clientBudget && bk.proBudget && !bk.agreedPrice) {
+        if (Math.round(bk.clientBudget) === Math.round(bk.proBudget)) {
+          _autoAgree(bk.clientBudget, ref.id);
+          return;
+        }
+      }
 
       if (bk.clientBudget && bk.proBudget && !chatSt.blindRevealed) {
         chatSt.blindRevealed = true;
@@ -232,10 +244,7 @@ async function openChat(p, s) {
       }
       if (bk.agreedPrice) {
         chatSt.agreed = true; chatSt.price = bk.agreedPrice; agreedPrice = bk.agreedPrice;
-        const qa = document.getElementById('chatQuickAccept');
-        if (qa) qa.style.display = 'none';
-        const br = document.getElementById('chatBlindReveal');
-        if (br) br.style.display = 'none';
+        _lockNegotiationUI(bk);
         // Só mostra botão de pagamento se ainda não pagou
         if (bk.status !== 'payment_confirmed' && bk.status !== 'completed') {
           document.getElementById('chatPay').classList.add('show');
@@ -443,8 +452,7 @@ function showBlindNegoReveal(clientBudget, proBudget, svc, side) {
 function acceptFairPrice(fair) {
   if (chatSt.agreed || !window.currentBookingId || !CU) return;
   chatSt.agreed = true; chatSt.price = fair; agreedPrice = fair;
-  const el = document.getElementById('chatBlindReveal');
-  if (el) el.style.display = 'none';
+  _lockNegotiationUI({ agreedPrice: fair, status: 'payment_pending' });
   document.getElementById('chatPay').classList.add('show');
   document.getElementById('cpPrice').textContent = 'R$ ' + fair + ',00';
   const msg = '✅ Aceito o valor justo de R$ ' + fair + ',00!';
@@ -493,7 +501,60 @@ function sendClientRevReject(proBudget) {
   if (ca) { ca.style.display = 'block'; const vi = document.getElementById('clientProposeVal'); if (vi) { vi.value = Math.round(val); onClientPriceInput(); } }
 }
 
-// === CAIXA DE NEGOCIAÇÃO (3 opções) — PROPOSTA DO PRO ===
+// === AUTO-ACORDO: quando clientBudget === proBudget, fecha automaticamente ===
+function _autoAgree(price, bookingId) {
+  if (chatSt.agreed) return;
+  const roundedPrice = Math.round(price);
+  chatSt.agreed = true; chatSt.price = roundedPrice; agreedPrice = roundedPrice;
+
+  // Esconde tudo de negociação
+  _lockNegotiationUI({ agreedPrice: roundedPrice, status: 'waiting_payment' });
+
+  // Grava no Firestore
+  db.collection('bookings').doc(bookingId).update({
+    agreedPrice: roundedPrice,
+    status: 'payment_pending',
+    priceAgreedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).catch(e => console.error('autoAgree update:', e));
+
+  // Mensagem de sistema
+  const sysMsg = 'Negociacao Fechada: R$ ' + roundedPrice + ',00 — Os valores propostos sao iguais!';
+  const seq = Date.now();
+  addMsg(sysMsg, 'sys');
+  db.collection('messages').add({
+    bookingId: bookingId, text: sysMsg, sender: 'sys', seq,
+    at: firebase.firestore.FieldValue.serverTimestamp()
+  }).catch(() => {});
+
+  // Mostra botão de pagamento
+  document.getElementById('chatPay').classList.add('show');
+  document.getElementById('cpPrice').textContent = 'R$ ' + roundedPrice + ',00';
+  toast('Valores iguais! Negociacao fechada em R$ ' + roundedPrice + ',00', 'ok');
+}
+
+// === TRAVA DE UI: esconde TODOS os campos de negociação e mostra banner ===
+function _lockNegotiationUI(bk) {
+  // Esconde áreas de negociação
+  const ids = ['chatQuickAccept', 'chatBlindReveal', 'chatClientProposeArea'];
+  ids.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+
+  // Mostra banner "Negociação Fechada" se há preço acordado
+  if (bk && bk.agreedPrice) {
+    const banner = document.getElementById('chatNegoBanner');
+    if (banner) {
+      banner.style.display = 'block';
+      const isPaid = bk.status === 'payment_confirmed' || bk.trackStatus === 'paid' ||
+                     bk.trackStatus === 'pro_on_way' || bk.trackStatus === 'pro_arrived' ||
+                     bk.trackStatus === 'completed';
+      banner.style.background = isPaid ? '#D1FAE5' : '#DBEAFE';
+      banner.style.color = isPaid ? '#065F46' : '#1D4ED8';
+      banner.innerHTML = '<div style="text-align:center;padding:10px;font-weight:700;font-size:.9rem">' +
+        (isPaid ? 'Pago' : 'Negociacao Fechada') + ': R$ ' + bk.agreedPrice + ',00</div>';
+    }
+  }
+}
+
+// === CARD DE PROPOSTA — PROPOSTA DO PRO (sem botão Contrapropor) ===
 function showQuickAccept(price) {
   if (chatSt.agreed) return;
   const qa = document.getElementById('chatQuickAccept');
@@ -511,7 +572,7 @@ function showQuickAccept(price) {
   qa.innerHTML =
     '<div class="nego-box">' +
       '<div class="nego-header">' +
-        '<div style="font-size:.7rem;font-weight:700;color:var(--text2);letter-spacing:.6px;margin-bottom:6px">💰 PROPOSTA DO PROFISSIONAL</div>' +
+        '<div style="font-size:.7rem;font-weight:700;color:var(--text2);letter-spacing:.6px;margin-bottom:6px">PROPOSTA DO PROFISSIONAL</div>' +
         '<div style="font-size:1.5rem;font-weight:800;color:var(--p)">R$ ' + price + ',00</div>' +
         '<div style="margin-top:8px">' +
           '<div style="display:flex;justify-content:space-between;font-size:.66rem;color:var(--text2);margin-bottom:2px"><span>Muito baixo</span><span>Justo (R$' + range.fair + ')</span><span>Alto</span></div>' +
@@ -522,9 +583,8 @@ function showQuickAccept(price) {
         '</div>' +
       '</div>' +
       '<div class="nego-actions">' +
-        '<button class="nego-btn nego-accept" onclick="quickAcceptPrice(' + price + ')">✅ Aceitar</button>' +
-        '<button class="nego-btn nego-reject" onclick="rejectProposal(' + price + ')">❌ Recusar</button>' +
-        '<button class="nego-btn nego-counter" onclick="openCounterPropose(' + price + ')">💬 Contrapropor</button>' +
+        '<button class="nego-btn nego-accept" onclick="quickAcceptPrice(' + price + ')">Aceitar R$ ' + price + '</button>' +
+        '<button class="nego-btn nego-reject" onclick="rejectProposal(' + price + ')">Recusar</button>' +
       '</div>' +
     '</div>';
 }
@@ -571,28 +631,13 @@ function sendRejectWithMin(originalPrice) {
   }
 }
 
-// === ABRIR CONTRAPROPOSTA ===
-function openCounterPropose(price) {
-  const qa = document.getElementById('chatQuickAccept');
-  if (qa) qa.style.display = 'none';
-  const ca = document.getElementById('chatClientProposeArea');
-  if (ca) {
-    ca.style.display = 'block';
-    const vi = document.getElementById('clientProposeVal');
-    if (vi) { vi.focus(); }
-  }
-}
-
 // Aceita a proposta DIRETAMENTE — sem depender de parsing de texto em sendMsg()
 function quickAcceptPrice(price) {
   if (chatSt.agreed || !window.currentBookingId || !CU) return;
   chatSt.agreed = true; chatSt.price = price; agreedPrice = price;
 
-  // Esconde áreas de negociação e mostra pagamento imediatamente
-  const qa = document.getElementById('chatQuickAccept');
-  if (qa) qa.style.display = 'none';
-  const pa = document.getElementById('chatClientProposeArea');
-  if (pa) pa.style.display = 'none';
+  // Trava UI de negociação imediatamente
+  _lockNegotiationUI({ agreedPrice: price, status: 'payment_pending' });
   document.getElementById('chatPay').classList.add('show');
   document.getElementById('cpPrice').textContent = 'R$ ' + price + ',00';
 
@@ -795,15 +840,24 @@ async function reopenClientChat(bookingId, proName, proIcon) {
     // Sincronização de status pós-pagamento
     _updateClientChatStatus(bk);
 
-    if (chatSt.agreed) return;
+    if (chatSt.agreed) {
+      _lockNegotiationUI(bk);
+      return;
+    }
+    // AUTO-ACORDO: preços iguais
+    if (bk.clientBudget && bk.proBudget && !bk.agreedPrice) {
+      if (Math.round(bk.clientBudget) === Math.round(bk.proBudget)) {
+        _autoAgree(bk.clientBudget, bookingId);
+        return;
+      }
+    }
     if (bk.lastProPosal && bk.lastProPosal !== _lastProPrice) {
       _lastProPrice = bk.lastProPosal;
       showQuickAccept(_lastProPrice);
     }
     if (bk.agreedPrice) {
       chatSt.agreed = true; chatSt.price = bk.agreedPrice; agreedPrice = bk.agreedPrice;
-      const qa = document.getElementById('chatQuickAccept');
-      if (qa) qa.style.display = 'none';
+      _lockNegotiationUI(bk);
       if (bk.status !== 'payment_confirmed' && bk.status !== 'completed') {
         document.getElementById('chatPay').classList.add('show');
         document.getElementById('cpPrice').textContent = 'R$ ' + bk.agreedPrice + ',00';
@@ -812,12 +866,18 @@ async function reopenClientChat(bookingId, proName, proIcon) {
   }, err => console.error('reopen booking listener:', err));
 }
 
-// === CARREGAR SERVIÇOS DO CLIENTE (com abas e listener real-time) ===
-let _clientBookingsListener = null;
-let _clientBookingsActiveTab = 'pagos';
+// === CARREGAR SERVIÇOS DO CLIENTE (query unificada + 2 abas com onSnapshot) ===
+// Query Unificada: busca documentos onde o usuário é clientId OU proId.
+// Regra de Ouro: o serviço NUNCA desaparece — se não está em uma aba, está na outra.
+let _clientBookingsListener1 = null; // listener por userId
+let _clientBookingsListener2 = null; // listener por proId
+let _clientBookingsActiveTab = 'andamento';
+let _clientBookingsByIdMap = new Map(); // merges both listeners by doc id
 
 function closeClientChatsM() {
-  if (_clientBookingsListener) { _clientBookingsListener(); _clientBookingsListener = null; }
+  if (_clientBookingsListener1) { _clientBookingsListener1(); _clientBookingsListener1 = null; }
+  if (_clientBookingsListener2) { _clientBookingsListener2(); _clientBookingsListener2 = null; }
+  _clientBookingsByIdMap = new Map();
   closeM('clientChatsM');
 }
 
@@ -827,106 +887,137 @@ async function showMyBookings() {
   const list = document.getElementById('clientChatsList');
   list.innerHTML = '<div style="text-align:center;padding:32px;color:var(--text2)">⏳ Carregando...</div>';
 
-  // Limpa listener anterior
-  if (_clientBookingsListener) { _clientBookingsListener(); _clientBookingsListener = null; }
+  // Limpa listeners anteriores
+  if (_clientBookingsListener1) { _clientBookingsListener1(); _clientBookingsListener1 = null; }
+  if (_clientBookingsListener2) { _clientBookingsListener2(); _clientBookingsListener2 = null; }
+  _clientBookingsByIdMap = new Map();
 
-  // Listener real-time: atualiza abas automaticamente quando status muda
-  _clientBookingsListener = db.collection('bookings')
+  const fromUserId = new Set();
+
+  function _rerender() {
+    const allDocs = [..._clientBookingsByIdMap.values()];
+    _renderClientBookings(allDocs);
+  }
+
+  // Listener 1: bookings where userId == CU.uid (client role)
+  _clientBookingsListener1 = db.collection('bookings')
     .where('userId', '==', CU.uid)
-    .limit(50)
+    .limit(100)
     .onSnapshot(snap => {
-      _renderClientBookings(snap);
+      snap.docChanges().forEach(change => {
+        if (change.type === 'removed') {
+          _clientBookingsByIdMap.delete(change.doc.id);
+          fromUserId.delete(change.doc.id);
+        } else {
+          _clientBookingsByIdMap.set(change.doc.id, { id: change.doc.id, ...change.doc.data() });
+          fromUserId.add(change.doc.id);
+        }
+      });
+      _rerender();
     }, err => {
-      console.error('client bookings listener:', err);
-      list.innerHTML = '<div style="text-align:center;padding:32px;color:var(--red)">❌ Erro ao carregar serviços.</div>';
+      console.error('client bookings listener (userId):', err);
+      list.innerHTML = '<div style="text-align:center;padding:32px;color:var(--red)">Erro ao carregar serviços.</div>';
+    });
+
+  // Listener 2: bookings where proId == CU.uid (pro role — user also sees services they provide)
+  _clientBookingsListener2 = db.collection('bookings')
+    .where('proId', '==', CU.uid)
+    .limit(100)
+    .onSnapshot(snap => {
+      snap.docChanges().forEach(change => {
+        if (change.type === 'removed') {
+          if (!fromUserId.has(change.doc.id)) _clientBookingsByIdMap.delete(change.doc.id);
+        } else {
+          if (!fromUserId.has(change.doc.id)) _clientBookingsByIdMap.set(change.doc.id, { id: change.doc.id, ...change.doc.data() });
+        }
+      });
+      _rerender();
+    }, err => {
+      console.error('client bookings listener (proId):', err);
     });
 }
 
-function _renderClientBookings(snap) {
+function _renderClientBookings(allDocs) {
   const list = document.getElementById('clientChatsList');
   if (!list) return;
 
-  if (snap.empty) {
-    list.innerHTML = '<div style="text-align:center;padding:32px;color:var(--text2)">😴 Nenhum serviço ainda.<br>Agende um serviço para começar!</div>';
+  if (allDocs.length === 0) {
+    list.innerHTML = '<div style="text-align:center;padding:32px;color:var(--text2)">Nenhum serviço ainda.<br>Agende um serviço para começar!</div>';
     return;
   }
 
-  const docs = [];
-  snap.forEach(doc => docs.push({ id: doc.id, ...doc.data() }));
-  docs.sort((a, b) => {
-    const ta = a.createdAt ? a.createdAt.toMillis() : 0;
-    const tb = b.createdAt ? b.createdAt.toMillis() : 0;
+  // Sort by createdAt descending
+  allDocs.sort((a, b) => {
+    const ta = a.createdAt ? (a.createdAt.toMillis ? a.createdAt.toMillis() : a.createdAt) : 0;
+    const tb = b.createdAt ? (b.createdAt.toMillis ? b.createdAt.toMillis() : b.createdAt) : 0;
     return tb - ta;
   });
 
-  // Filtra: remove recusados e chats sem acordo com mais de 4 horas
-  const filtered = docs.filter(bk => {
-    if (bk.declinedBy && bk.declinedBy.length > 0) return false;
-    if (bk.agreedPrice) return true;
-    if (['accepted', 'payment_pending', 'payment_confirmed', 'completed'].includes(bk.status)) return true;
-    const ts = bk.createdAt ? bk.createdAt.toMillis() : 0;
-    return Date.now() - ts < 4 * 60 * 60 * 1000;
+  // Statuses ativos: serviço em andamento (inclui chat, negociação, pagamento, tracking)
+  const ACTIVE_STATUSES = ['chat', 'accepted', 'payment_pending', 'payment_confirmed'];
+  const ACTIVE_TRACK = ['paid', 'pro_on_way', 'pro_arrived'];
+  const HISTORY_STATUSES = ['completed', 'cancelled'];
+
+  // Em Andamento: status ativo E trackStatus NÃO concluído
+  const andamento = allDocs.filter(bk => {
+    if (HISTORY_STATUSES.includes(bk.status)) return false;
+    if (bk.trackStatus === 'completed') return false;
+    if (ACTIVE_STATUSES.includes(bk.status)) return true;
+    if (ACTIVE_TRACK.includes(bk.trackStatus)) return true;
+    return true; // catch-all: if not completed/cancelled, it's active
   });
 
-  if (filtered.length === 0) {
-    list.innerHTML = '<div style="text-align:center;padding:32px;color:var(--text2)">😴 Nenhum serviço ativo.<br>Agende um serviço para começar!</div>';
-    return;
-  }
-
-  // Agrupa por categoria
-  const cats = {
-    pagos: filtered.filter(bk => bk.status === 'payment_confirmed' && (!bk.trackStatus || bk.trackStatus === 'paid') && bk.trackStatus !== 'completed'),
-    acaminho: filtered.filter(bk => bk.trackStatus === 'pro_on_way'),
-    andamento: filtered.filter(bk => bk.trackStatus === 'pro_arrived'),
-    chats: filtered.filter(bk => ['chat', 'accepted', 'payment_pending'].includes(bk.status)),
-    finalizados: filtered.filter(bk => bk.status === 'completed')
-  };
+  // Anteriores/Histórico: completed or cancelled, ordered by createdAt desc
+  const historico = allDocs.filter(bk => {
+    return HISTORY_STATUSES.includes(bk.status) || bk.trackStatus === 'completed';
+  });
 
   // Aba ativa: mantém a seleção atual ou escolhe a primeira não-vazia
   let tab = _clientBookingsActiveTab;
-  if (!cats[tab] || cats[tab].length === 0) {
-    if (cats.pagos.length > 0) tab = 'pagos';
-    else if (cats.acaminho.length > 0) tab = 'acaminho';
-    else if (cats.andamento.length > 0) tab = 'andamento';
-    else if (cats.chats.length > 0) tab = 'chats';
-    else tab = 'finalizados';
-  }
+  if (tab === 'andamento' && andamento.length === 0 && historico.length > 0) tab = 'historico';
+  if (tab === 'historico' && historico.length === 0 && andamento.length > 0) tab = 'andamento';
 
   list.innerHTML = '';
 
-  // Abas
-  const tabs = document.createElement('div');
-  tabs.style.cssText = 'display:flex;gap:4px;margin-bottom:14px;overflow-x:auto;padding-bottom:4px';
+  // 2 Abas
+  const tabsEl = document.createElement('div');
+  tabsEl.style.cssText = 'display:flex;gap:4px;margin-bottom:14px;overflow-x:auto;padding-bottom:4px';
   const tabDefs = [
-    { key: 'pagos', label: '💳 Pagos', count: cats.pagos.length },
-    { key: 'acaminho', label: '🚗 A caminho', count: cats.acaminho.length },
-    { key: 'andamento', label: '🔧 Em Andamento', count: cats.andamento.length },
-    { key: 'chats', label: '💬 Chats', count: cats.chats.length },
-    { key: 'finalizados', label: '🏆 Finalizados', count: cats.finalizados.length }
+    { key: 'andamento', label: 'Em Andamento', count: andamento.length },
+    { key: 'historico', label: 'Anteriores', count: historico.length }
   ];
   tabDefs.forEach(td => {
     const btn = document.createElement('button');
     btn.className = 'cli-tab-btn' + (td.key === tab ? ' active' : '');
     btn.dataset.tab = td.key;
-    btn.textContent = td.label + (td.count > 0 ? ' (' + td.count + ')' : '');
-    btn.style.cssText = 'padding:6px 12px;border-radius:20px;font-size:.75rem;font-weight:700;border:1.5px solid var(--border);background:' + (td.key === tab ? 'var(--p)' : 'var(--bg)') + ';color:' + (td.key === tab ? '#fff' : 'var(--text2)') + ';cursor:pointer;white-space:nowrap;transition:all .2s';
+    btn.textContent = td.label + ' (' + td.count + ')';
+    btn.style.cssText = 'padding:8px 16px;border-radius:20px;font-size:.8rem;font-weight:700;border:1.5px solid var(--border);background:' + (td.key === tab ? 'var(--p)' : 'var(--bg)') + ';color:' + (td.key === tab ? '#fff' : 'var(--text2)') + ';cursor:pointer;white-space:nowrap;transition:all .2s';
     btn.onclick = () => _switchClientTab(td.key);
-    tabs.appendChild(btn);
+    tabsEl.appendChild(btn);
   });
-  list.appendChild(tabs);
+  list.appendChild(tabsEl);
 
-  // Conteúdo das abas
-  tabDefs.forEach(td => {
-    const container = document.createElement('div');
-    container.id = 'cli-tab-' + td.key;
-    container.style.cssText = 'display:' + (td.key === tab ? 'flex' : 'none') + ';flex-direction:column;gap:10px';
-    if (cats[td.key].length === 0) {
-      container.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text2);font-size:.85rem">Nenhum serviço nesta categoria</div>';
-    } else {
-      cats[td.key].forEach(bk => container.appendChild(_buildClientBookingCard(bk, td.key)));
-    }
-    list.appendChild(container);
-  });
+  // Conteúdo: Em Andamento
+  const contAndamento = document.createElement('div');
+  contAndamento.id = 'cli-tab-andamento';
+  contAndamento.style.cssText = 'display:' + (tab === 'andamento' ? 'flex' : 'none') + ';flex-direction:column;gap:10px';
+  if (andamento.length === 0) {
+    contAndamento.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text2);font-size:.85rem">Nenhum serviço em andamento</div>';
+  } else {
+    andamento.forEach(bk => contAndamento.appendChild(_buildClientBookingCard(bk)));
+  }
+  list.appendChild(contAndamento);
+
+  // Conteúdo: Anteriores/Histórico
+  const contHistorico = document.createElement('div');
+  contHistorico.id = 'cli-tab-historico';
+  contHistorico.style.cssText = 'display:' + (tab === 'historico' ? 'flex' : 'none') + ';flex-direction:column;gap:10px';
+  if (historico.length === 0) {
+    contHistorico.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text2);font-size:.85rem">Nenhum serviço anterior</div>';
+  } else {
+    historico.forEach(bk => contHistorico.appendChild(_buildClientBookingCard(bk)));
+  }
+  list.appendChild(contHistorico);
 }
 
 function _switchClientTab(tab) {
@@ -937,43 +1028,50 @@ function _switchClientTab(tab) {
     btn.style.background = active ? 'var(--p)' : 'var(--bg)';
     btn.style.color = active ? '#fff' : 'var(--text2)';
   });
-  ['pagos', 'acaminho', 'andamento', 'chats', 'finalizados'].forEach(key => {
+  ['andamento', 'historico'].forEach(key => {
     const el = document.getElementById('cli-tab-' + key);
     if (el) el.style.display = key === tab ? 'flex' : 'none';
   });
 }
 
-function _buildClientBookingCard(bk, category) {
+function _buildClientBookingCard(bk) {
   const card = document.createElement('div');
   card.style.cssText = 'border:1px solid var(--border);border-radius:var(--rs);padding:14px;cursor:pointer;transition:all .2s;background:var(--bg2)';
   card.onmouseover = () => card.style.borderColor = 'var(--p)';
   card.onmouseout = () => card.style.borderColor = '';
 
-  const date = bk.createdAt ? bk.createdAt.toDate() : new Date();
+  const date = bk.createdAt ? (bk.createdAt.toDate ? bk.createdAt.toDate() : new Date(bk.createdAt)) : new Date();
   const dateStr = date.toLocaleDateString('pt-BR') + ' ' + date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
+  // Determine status label based on actual status/trackStatus
   let statusLabel, statusColor;
-  if (category === 'pagos') {
-    statusLabel = bk.trackStatus === 'pro_on_way' ? '🚗 A caminho' : '💳 Aguardando profissional';
-    statusColor = bk.trackStatus === 'pro_on_way' ? '#F97316' : '#059669';
-  } else if (category === 'andamento') {
-    statusLabel = '🔧 Em andamento'; statusColor = '#3B82F6';
-  } else if (category === 'finalizados') {
-    statusLabel = '🏆 Concluído'; statusColor = '#6B7280';
+  if (bk.status === 'completed' || bk.trackStatus === 'completed') {
+    statusLabel = 'Concluido'; statusColor = '#6B7280';
+  } else if (bk.status === 'cancelled') {
+    statusLabel = 'Cancelado'; statusColor = '#EF4444';
+  } else if (bk.trackStatus === 'pro_arrived') {
+    statusLabel = 'Em andamento'; statusColor = '#3B82F6';
+  } else if (bk.trackStatus === 'pro_on_way') {
+    statusLabel = 'A caminho'; statusColor = '#F97316';
+  } else if (bk.status === 'payment_confirmed' || bk.trackStatus === 'paid') {
+    statusLabel = 'Pago'; statusColor = '#059669';
+  } else if (bk.status === 'payment_pending') {
+    statusLabel = 'Aguardando pagamento'; statusColor = '#EAB308';
+  } else if (bk.status === 'accepted') {
+    statusLabel = 'Aceito'; statusColor = '#10B981';
   } else {
-    if (bk.status === 'accepted' || bk.status === 'payment_pending') { statusLabel = '✅ Aceito'; statusColor = '#10B981'; }
-    else { statusLabel = '💬 Em aberto'; statusColor = '#3B82F6'; }
+    statusLabel = 'Em aberto'; statusColor = '#3B82F6';
   }
 
   const addr = (bk.details && bk.details.addr) || bk.addr || '';
-  const svc = (bk.details && bk.details.svc) || bk.service || 'Serviço';
+  const svc = (bk.details && bk.details.svc) || bk.service || 'Servico';
 
   card.innerHTML =
     '<div style="display:flex;justify-content:space-between;align-items:start;gap:8px">' +
       '<div style="flex:1;min-width:0">' +
         '<div style="font-weight:700;margin-bottom:4px">' + esc(svc) + '</div>' +
-        '<div style="font-size:.82rem;color:var(--text2);margin-bottom:4px">🔧 ' + esc(bk.proName || 'Aguardando profissional') + '</div>' +
-        (addr ? '<div style="font-size:.78rem;color:var(--text2)">📍 ' + esc(addr) + '</div>' : '') +
+        '<div style="font-size:.82rem;color:var(--text2);margin-bottom:4px">' + esc(bk.proName || 'Aguardando profissional') + '</div>' +
+        (addr ? '<div style="font-size:.78rem;color:var(--text2)">' + esc(addr) + '</div>' : '') +
       '</div>' +
       '<div style="text-align:right;flex-shrink:0">' +
         '<div style="font-size:.72rem;padding:3px 8px;border-radius:20px;font-weight:700;background:' + statusColor + '22;color:' + statusColor + ';margin-bottom:6px">' + statusLabel + '</div>' +

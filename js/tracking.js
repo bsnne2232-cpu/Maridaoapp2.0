@@ -208,7 +208,7 @@ async function verifyArr() {
     return;
   }
 
-  if (vHash === trackingState.arrHash) {
+  if (String(vHash).trim() === String(trackingState.arrHash).trim()) {
     document.getElementById('arrErr').style.display = 'none';
     const s = document.querySelectorAll('.trk-step');
     s[2].classList.add('done'); s[2].querySelector('.trk-time').textContent = 'Confirmado';
@@ -226,7 +226,8 @@ async function verifyArr() {
 
 // === COMPLETION CODE VERIFY ===
 async function verifyComp() {
-  if (!checkAttempts('comp')) return;
+  const vcBtn = event && event.target; if (vcBtn) { vcBtn.disabled = true; vcBtn.textContent = '⏳ Verificando...'; }
+  if (!checkAttempts('comp')) { if (vcBtn) { vcBtn.disabled = false; vcBtn.textContent = '✅ Confirmar e liberar pagamento'; } return; }
   const v = [1, 2, 3, 4].map(i => (document.getElementById('cI' + i).value || '').trim().replace(/\D/g, '')).join('');
 
   // Primary: in-memory hash
@@ -237,8 +238,8 @@ async function verifyComp() {
       return;
     }
   } else if (_storedCompCode) {
-    // Fallback: direct match from stored code
-    if (v !== _storedCompCode) {
+    // Fallback: direct match with forced String comparison
+    if (String(v).trim() !== String(_storedCompCode).trim()) {
       _showCompErr();
       return;
     }
@@ -250,8 +251,8 @@ async function verifyComp() {
         const bk = snap.data();
         if (bk.compCodeHash) {
           const vHash = await hashCode(v);
-          if (vHash !== bk.compCodeHash) { _showCompErr(); return; }
-        } else if (bk.compCode && v !== bk.compCode) {
+          if (String(vHash).trim() !== String(bk.compCodeHash).trim()) { _showCompErr(); return; }
+        } else if (bk.compCode && String(v).trim() !== String(bk.compCode).trim()) {
           _showCompErr(); return;
         }
       }
@@ -285,7 +286,7 @@ async function verifyComp() {
   document.getElementById('trkSteps').style.display = 'none';
   const s = document.querySelectorAll('.trk-step');
   s[4].classList.add('done');
-  document.getElementById('doneAmt').textContent = 'R$ ' + (agreedPrice * .75).toFixed(2);
+  document.getElementById('doneAmt').textContent = 'R$ ' + (Math.round(agreedPrice * (1 - 0.08) * 100) / 100).toFixed(2);
   document.getElementById('doneSec').style.display = 'block';
   toast('Concluído! Pagamento liberado! 🎉', 'ok');
   _codeAttempts.comp = 0;
