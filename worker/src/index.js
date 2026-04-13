@@ -632,9 +632,10 @@ async function handleVerifyCode(request, env) {
 
   let body;
   try { body = await request.json(); } catch (_) { return json({ error: 'bad json' }, 400); }
-  const bookingId = String(body.bookingId || '');
+  const bookingId = String(body.bookingId || '').trim();
   const type      = body.type; // 'arrival' | 'completion'
-  const code      = String(body.code || '');
+  // Trim + force string para evitar espaços invisíveis do teclado mobile
+  const code      = String(body.code || '').trim().replace(/\D/g, '');
   if (!bookingId || !/^(arrival|completion)$/.test(type) || !/^\d{4}$/.test(code)) {
     return json({ error: 'bad payload' }, 400);
   }
@@ -644,6 +645,17 @@ async function handleVerifyCode(request, env) {
 
   const expected = type === 'arrival' ? booking.arrCodeHash : booking.compCodeHash;
   const hash = await sha256Hex(code);
+
+  // Log de depuração — confirma que o Worker está buscando o documento correto
+  console.log('[verify-code]', {
+    bookingId,
+    type,
+    codeReceived: code,
+    hashCalculated: hash,
+    hashExpected: expected || '(não encontrado)',
+    match: expected === hash
+  });
+
   if (!expected || expected !== hash) return json({ ok: false }, 200);
 
   if (type === 'arrival') {

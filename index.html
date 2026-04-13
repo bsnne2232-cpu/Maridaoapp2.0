@@ -544,7 +544,7 @@ Cancelamentos em cima da hora podem resultar em avaliação negativa e suspensã
 <div class="chat-in">
   <button onclick="document.getElementById('proProposeArea').style.display=document.getElementById('proProposeArea').style.display==='none'?'block':'none'" title="Propor valor" style="width:36px;height:36px;border-radius:50%;background:var(--pl);border:none;cursor:pointer;font-size:1rem;flex-shrink:0">💰</button>
   <input type="text" id="proChatIn" placeholder="Responda ao cliente..." onkeydown="if(event.key==='Enter')sendProMsg()">
-  <button onclick="sendProMsg()">➤</button>
+  <button id="proChatSendBtn" onclick="sendProMsg()">➤</button>
 </div>
 </div></div>
 
