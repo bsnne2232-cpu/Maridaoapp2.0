@@ -90,9 +90,10 @@ async function validateAndPay() {
 
   let res;
   try {
+    const token = await CU.getIdToken();
     res = await safeFetch(API_URL + '/api/process-payment', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
       body: JSON.stringify(payload)
     }, 20000);
   } catch (e) {
