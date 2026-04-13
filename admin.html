@@ -1,301 +1,243 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="robots" content="noindex, nofollow">
-<title>Painel Admin — Maridão</title>
-<style>
-  :root{
-    --bg:#0B1220; --bg2:#111B2E; --card:#15203A; --line:#1F2C47;
-    --text:#E7ECF5; --text2:#9AA7BD; --primary:#3B82F6; --green:#10B981;
-    --red:#EF4444; --amber:#F59E0B;
-  }
-  *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
-  .wrap{max-width:1080px;margin:0 auto;padding:24px 16px 64px}
-  header{display:flex;align-items:center;justify-content:space-between;padding:16px 0;border-bottom:1px solid var(--line);margin-bottom:24px}
-  h1{font-size:22px;font-weight:700}
-  h1 small{font-size:12px;font-weight:500;color:var(--text2);margin-left:8px}
-  .me{font-size:13px;color:var(--text2)}
-  .me b{color:var(--text)}
-  .btn{cursor:pointer;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;transition:all .15s}
-  .btn:disabled{opacity:.55;cursor:not-allowed}
-  .btn-primary{background:var(--primary);color:#fff}
-  .btn-ghost{background:transparent;color:var(--text2);border:1px solid var(--line)}
-  .btn-ok{background:var(--green);color:#fff}
-  .btn-err{background:var(--red);color:#fff}
-  .btn-ok:hover,.btn-err:hover,.btn-primary:hover{filter:brightness(1.1)}
-  .tabs{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
-  .tab{padding:8px 14px;border-radius:20px;border:1px solid var(--line);background:var(--bg2);color:var(--text2);font-size:13px;cursor:pointer}
-  .tab.active{background:var(--primary);color:#fff;border-color:var(--primary)}
-  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:14px}
-  .card header{border:0;margin:0 0 10px;padding:0;align-items:flex-start}
-  .card-title{font-size:16px;font-weight:700;margin-bottom:2px}
-  .card-sub{font-size:12px;color:var(--text2)}
-  .badge{display:inline-block;font-size:11px;padding:2px 8px;border-radius:10px;font-weight:600;margin-left:6px}
-  .badge.pending{background:rgba(245,158,11,.15);color:var(--amber)}
-  .badge.active{background:rgba(16,185,129,.15);color:var(--green)}
-  .badge.rejected{background:rgba(239,68,68,.15);color:var(--red)}
-  .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 18px;font-size:13px;margin-top:12px}
-  .grid div b{color:var(--text2);font-weight:500;display:block;font-size:11px;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px}
-  .docs{display:flex;gap:12px;flex-wrap:wrap;margin-top:16px}
-  .doc{flex:1 1 160px;background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:12px;text-align:center}
-  .doc .lbl{font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px}
-  .doc img{width:100%;max-height:140px;object-fit:cover;border-radius:6px;display:block;background:#222;cursor:zoom-in}
-  .doc .na{font-size:12px;color:var(--red);padding:20px 0}
-  .actions{display:flex;gap:8px;margin-top:14px;justify-content:flex-end}
-  .empty{text-align:center;color:var(--text2);padding:64px 16px}
-  .empty .e{font-size:48px;margin-bottom:12px}
-  .loader{text-align:center;padding:32px;color:var(--text2)}
-  .spinner{display:inline-block;width:18px;height:18px;border:2px solid rgba(255,255,255,.2);border-top-color:#fff;border-radius:50%;animation:sp .8s linear infinite;vertical-align:middle;margin-right:6px}
-  @keyframes sp{to{transform:rotate(360deg)}}
-  .gate{max-width:420px;margin:80px auto;text-align:center;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:36px 24px}
-  .gate h2{font-size:20px;margin-bottom:8px}
-  .gate p{color:var(--text2);font-size:13px;margin-bottom:20px}
-  .zoom{position:fixed;inset:0;background:rgba(0,0,0,.88);display:none;align-items:center;justify-content:center;z-index:100;padding:20px}
-  .zoom.show{display:flex}
-  .zoom img{max-width:95vw;max-height:92vh;border-radius:8px}
-  .zoom .close{position:absolute;top:16px;right:16px;background:#fff;color:#000;border:0;width:36px;height:36px;border-radius:50%;font-size:20px;cursor:pointer}
-  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--card);border:1px solid var(--line);color:var(--text);padding:12px 20px;border-radius:10px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:200}
-  .toast.show{opacity:1}
-  .toast.ok{border-color:var(--green)}
-  .toast.err{border-color:var(--red)}
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Maridão Admin - Profissionais</title>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
+  <style>
+    :root{--bg:#fff;--bg2:#f8fafc;--p:#3b82f6;--text:#1e293b;--text2:#64748b;--red:#ef4444;--border:#e2e8f0;--rs:8px;--r:12px;}
+    *{box-sizing:border-box;margin:0;padding:0;font-family:system-ui,-apple-system,system-ui,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;}
+    body{background:var(--bg2);color:var(--text);padding:20px;font-size:14px;line-height:1.5;}
+    .header{display:flex;align-items:center;gap:12px;margin-bottom:24px;padding:20px;background:var(--bg);border-radius:var(--r);box-shadow:0 1px 3px rgba(0,0,0,.1);}
+    .logout{font-size:12px;background:var(--red);color:white;padding:8px 16px;border:none;border-radius:6px;cursor:pointer;font-weight:500;}
+    .status-badge{display:inline-block;padding:4px 8px;border-radius:6px;font-size:12px;font-weight:600;}
+    .status-approved{background:#d1fae5;color:#065f46;}
+    .status-pending{background:#fef3c7;color:#92400e;}
+    .status-rejected{background:#fee2e2;color:#991b1b;}
+    .pro-card{display:flex;gap:16px;padding:20px;background:var(--bg);border-radius:var(--r);margin-bottom:16px;border:1px solid var(--border);}
+    .pro-avatar{width:64px;height:64px;border-radius:50%;background:var(--p);color:white;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;flex-shrink:0;}
+    .pro-info{flex:1;}
+    .pro-name{font-size:20px;font-weight:700;margin-bottom:4px;}
+    .pro-email{font-size:14px;color:var(--text2);margin-bottom:8px;}
+    .pro-meta{display:flex;flex-wrap:wrap;gap:12px;font-size:13px;color:var(--text2);margin-bottom:16px;}
+    .docs-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:16px;}
+    .doc-item{text-align:center;}
+    .doc-thumb{width:100%;height:120px;border-radius:8px;border:2px solid var(--border);background:var(--bg2);display:flex;align-items:center;justify-content:center;color:var(--text2);font-size:48px;}
+    .btn{display:inline-block;padding:10px 20px;border:none;border-radius:6px;font-weight:600;cursor:pointer;text-decoration:none;font-size:14px;min-width:120px;text-align:center;}
+    .btn-approve{background:#10b981;color:white;}
+    .btn-reject{background:#ef4444;color:white;}
+    .btn:disabled{opacity:0.6;cursor:not-allowed;}
+    .no-pros{text-align:center;padding:40px;color:var(--text2);}
+    .spinner{display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,.3);border-top:2px solid white;border-radius:50%;animation:spin 1s linear infinite;}
+    @keyframes spin{to{transform:rotate(360deg);}}
+    @media(max-width:768px){.pro-card{flex-direction:column;}.pro-meta{flex-direction:column;gap:8px;}}
+  </style>
 </head>
 <body>
-
-<div id="gate" class="gate" style="display:none">
-  <h2>🔒 Painel restrito</h2>
-  <p id="gateMsg">Você precisa estar autenticado como administrador para acessar esta página.</p>
-  <button class="btn btn-primary" onclick="adminLogin()">Entrar com Google</button>
-</div>
-
-<div id="app" class="wrap" style="display:none">
-  <header>
-    <h1>Painel Admin <small>Maridão</small></h1>
-    <div>
-      <span class="me">Logado como <b id="meName"></b></span>
-      <button class="btn btn-ghost" onclick="adminLogout()" style="margin-left:10px">Sair</button>
-    </div>
-  </header>
-
-  <div class="tabs">
-    <button class="tab active" data-tab="pending" onclick="switchTab('pending')">Aguardando aprovação</button>
-    <button class="tab" data-tab="approved" onclick="switchTab('approved')">Aprovados</button>
-    <button class="tab" data-tab="rejected" onclick="switchTab('rejected')">Rejeitados</button>
+  <div class="header">
+    <h1>👑 Maridão Admin</h1>
+    <button class="logout" onclick="logout()">Sair</button>
   </div>
 
-  <div id="list"></div>
-</div>
+  <div id="loading" style="text-align:center;padding:40px;color:var(--text2);">Carregando profissionais pendentes...</div>
+  <div id="content" style="display:none;"></div>
 
-<div class="zoom" id="zoom" onclick="if(event.target===this)closeZoom()">
-  <button class="close" onclick="closeZoom()">×</button>
-  <img id="zoomImg" alt="">
-</div>
+  <script>
+    // Firebase config (same as main app)
+    const firebaseConfig = {
+      apiKey: "AIzaSyB2FLQf4WmAeL4lAv3e1b9x6j4eA9tH2mQ",
+      authDomain: "maridaoapp-cbb4e.firebaseapp.com",
+      projectId: "maridaoapp-cbb4e",
+      storageBucket: "maridaoapp-cbb4e.firebasestorage.app",
+      messagingSenderId: "812459445930",
+      appId: "1:812459445930:web:a55b5e7b3e0e5b2b4c2a2e"
+    };
 
-<div class="toast" id="toast"></div>
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+    const storage = firebase.storage();
 
-<!-- Firebase SDK v8 (mesma versão do app principal) -->
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-storage.js"></script>
-<script>
-firebase.initializeApp({
-  apiKey: "AIzaSyDzFg1cYsFbAkIiCbW26GM1vrYg2M7JCDU",
-  authDomain: "maridaoapp-cbb4e.firebaseapp.com",
-  projectId: "maridaoapp-cbb4e",
-  storageBucket: "maridaoapp-cbb4e.firebasestorage.app",
-  messagingSenderId: "817190352839",
-  appId: "1:817190352839:web:7a9dd8196254a93bbd0be2"
-});
-const auth = firebase.auth();
-const db = firebase.firestore();
-const storage = firebase.storage();
-let currentTab = 'pending';
-let isAdmin = false;
+    let currentUser = null;
 
-function toast(msg, t){
-  const el = document.getElementById('toast');
-  el.textContent = msg;
-  el.className = 'toast show ' + (t || '');
-  setTimeout(()=>el.classList.remove('show'), 2800);
-}
-
-function showGate(msg){
-  document.getElementById('gate').style.display = 'block';
-  document.getElementById('app').style.display = 'none';
-  if (msg) document.getElementById('gateMsg').textContent = msg;
-}
-
-function showApp(){
-  document.getElementById('gate').style.display = 'none';
-  document.getElementById('app').style.display = 'block';
-}
-
-async function adminLogin(){
-  try {
-    await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());
-  } catch (e) {
-    toast('Falha no login: ' + (e.message || e.code), 'err');
-  }
-}
-
-function adminLogout(){ auth.signOut(); }
-
-// Porta de entrada: só deixa passar quem tem role=admin na coleção users.
-// As firestore.rules também garantem isso — sem o papel correto, as queries
-// abaixo simplesmente retornam PERMISSION_DENIED.
-auth.onAuthStateChanged(async u => {
-  if (!u) { isAdmin = false; showGate(); return; }
-  try {
-    const doc = await db.collection('users').doc(u.uid).get();
-    const role = doc.exists ? (doc.data().role || '') : '';
-    if (role !== 'admin') {
-      isAdmin = false;
-      showGate('Esta conta (' + u.email + ') não tem privilégios de administrador.');
-      return;
-    }
-    isAdmin = true;
-    document.getElementById('meName').textContent = u.displayName || u.email;
-    showApp();
-    loadList();
-  } catch (e) {
-    showGate('Erro ao validar permissões: ' + e.code);
-  }
-});
-
-function switchTab(tab){
-  currentTab = tab;
-  document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
-  loadList();
-}
-
-// Lista profissionais filtrando por docsStatus (pending/active/rejected).
-// Para 1.000 usuários no bairro, uma query filtrada por índice é mais que
-// suficiente — sem paginação, mas já preparada para .limit() se escalar.
-async function loadList(){
-  const list = document.getElementById('list');
-  list.innerHTML = '<div class="loader"><span class="spinner"></span>Carregando profissionais...</div>';
-  try {
-    const snap = await db.collection('professionals')
-      .where('docsStatus', '==', currentTab)
-      .limit(100)
-      .get();
-    if (snap.empty) {
-      list.innerHTML = '<div class="empty"><div class="e">📭</div>Nenhum profissional nesta categoria.</div>';
-      return;
-    }
-    const cards = [];
-    snap.forEach(d => cards.push(renderCard(d.id, d.data())));
-    list.innerHTML = cards.join('');
-    // Carrega URLs do Storage em paralelo depois de inserir no DOM
-    snap.forEach(d => loadDocs(d.id, d.data()));
-  } catch (e) {
-    console.error(e);
-    list.innerHTML = '<div class="empty"><div class="e">⚠️</div>Erro ao carregar: ' + (e.code || e.message) + '</div>';
-  }
-}
-
-function esc(s){ const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
-
-function renderCard(id, p){
-  const statusBadge = p.docsStatus === 'pending' ? 'pending' : (p.docsStatus === 'approved' ? 'active' : 'rejected');
-  const actions = currentTab === 'pending'
-    ? `<div class="actions">
-         <button class="btn btn-err" onclick="reject('${id}')">Rejeitar</button>
-         <button class="btn btn-ok" onclick="approve('${id}')">Aprovar</button>
-       </div>`
-    : (currentTab === 'rejected'
-        ? `<div class="actions"><button class="btn btn-primary" onclick="approve('${id}')">Reativar</button></div>`
-        : `<div class="actions"><button class="btn btn-err" onclick="reject('${id}')">Suspender</button></div>`);
-  return `
-    <div class="card" id="card-${id}">
-      <header>
-        <div>
-          <div class="card-title">${esc(p.name || 'Sem nome')}<span class="badge ${statusBadge}">${esc(p.docsStatus || '—')}</span></div>
-          <div class="card-sub">${esc(p.spec || '—')} • R$ ${esc(p.rate || 0)} • ${esc(p.email || '')}</div>
-        </div>
-      </header>
-      <div class="grid">
-        <div><b>CPF</b>${esc(p.cpfMasked || '—')}</div>
-        <div><b>CEP</b>${esc(p.cep || '—')}</div>
-        <div><b>PIX</b>${esc(p.pix || '—')}</div>
-        <div><b>Raio atendido</b>${esc(p.radius || '—')} km</div>
-        <div><b>Data Nasc.</b>${esc(p.dob || '—')}</div>
-        <div><b>Enviado em</b>${p.at && p.at.toDate ? p.at.toDate().toLocaleString('pt-BR') : '—'}</div>
-      </div>
-      <div class="docs" id="docs-${id}">
-        <div class="doc"><div class="lbl">RG/CNH</div><div class="na">Carregando...</div></div>
-        <div class="doc"><div class="lbl">Selfie</div><div class="na">Carregando...</div></div>
-        <div class="doc"><div class="lbl">Comprovante</div><div class="na">Carregando...</div></div>
-      </div>
-      ${actions}
-    </div>`;
-}
-
-// Os documentos ficam em /professionals/{uid}/{tipo}.jpg no Storage.
-// Se o upload ainda não foi feito (upload simulado), mostra "não enviado".
-async function loadDocs(id, p){
-  const uid = p.uid;
-  const container = document.getElementById('docs-' + id);
-  if (!container || !uid) return;
-  const tipos = [
-    { key: 'doc',    label: 'RG/CNH' },
-    { key: 'selfie', label: 'Selfie' },
-    { key: 'addr',   label: 'Comprovante' }
-  ];
-  const htmls = await Promise.all(tipos.map(async t => {
-    try {
-      const url = await storage.ref('professionals/' + uid + '/' + t.key + '.jpg').getDownloadURL();
-      return `<div class="doc"><div class="lbl">${t.label}</div><img src="${url}" alt="${t.label}" onclick="zoom('${url}')"></div>`;
-    } catch (_) {
-      return `<div class="doc"><div class="lbl">${t.label}</div><div class="na">Não enviado</div></div>`;
-    }
-  }));
-  container.innerHTML = htmls.join('');
-}
-
-function zoom(url){
-  document.getElementById('zoomImg').src = url;
-  document.getElementById('zoom').classList.add('show');
-}
-function closeZoom(){ document.getElementById('zoom').classList.remove('show'); }
-
-// Aprovar/rejeitar: só um admin consegue gravar aqui (ver firestore.rules).
-async function approve(id){
-  if (!confirm('Aprovar este profissional? Ele ficará visível publicamente.')) return;
-  try {
-    await db.collection('professionals').doc(id).update({
-      docsStatus: 'approved',
-      status: 'active',
-      approvedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      approvedBy: auth.currentUser.uid
+    // Check admin role on auth state change
+    auth.onAuthStateChanged(async (user) => {
+      if (!user) {
+        window.location.href = 'index.html';
+        return;
+      }
+      currentUser = user;
+      
+      // Verify admin role via custom claim
+      try {
+        const token = await user.getIdTokenResult();
+        if (!token.claims.admin) {
+          alert('Acesso negado. Entre em contato com o suporte.');
+          auth.signOut();
+          return;
+        }
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('content').style.display = 'block';
+        loadPendingPros();
+      } catch (e) {
+        console.error('Admin check failed:', e);
+        auth.signOut();
+      }
     });
-    toast('Profissional aprovado ✅', 'ok');
-    const el = document.getElementById('card-' + id); if (el) el.remove();
-  } catch (e) {
-    toast('Erro: ' + (e.code || e.message), 'err');
-  }
-}
 
-async function reject(id){
-  const reason = prompt('Motivo da rejeição (opcional):') || '';
-  try {
-    await db.collection('professionals').doc(id).update({
-      docsStatus: 'rejected',
-      status: 'rejected',
-      rejectedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      rejectedBy: auth.currentUser.uid,
-      rejectionReason: reason.slice(0, 500)
-    });
-    toast('Profissional rejeitado', 'ok');
-    const el = document.getElementById('card-' + id); if (el) el.remove();
-  } catch (e) {
-    toast('Erro: ' + (e.code || e.message), 'err');
-  }
-}
-</script>
+    async function loadPendingPros() {
+      try {
+        const snapshot = await db.collection('professionals')
+          .where('docsStatus', 'in', ['pending', 'rejected'])
+          .orderBy('createdAt', 'desc')
+          .get();
+
+        const content = document.getElementById('content');
+        if (snapshot.empty) {
+          content.innerHTML = '<div class="no-pros">✅ Nenhum profissional pendente!</div>';
+          return;
+        }
+
+        let html = '';
+        snapshot.forEach(doc => {
+          const pro = doc.data();
+          const docId = doc.id;
+          const statusClass = pro.docsStatus === 'approved' ? 'status-approved' :
+                             pro.docsStatus === 'pending' ? 'status-pending' : 'status-rejected';
+          
+          // Generate doc thumbnails
+          const docsHtml = (pro.docs || []).map((docUrl, i) => 
+            `<div class="doc-item">
+              <div class="doc-thumb" style="background-image:url(${docUrl}?w=160&h=120&fit=crop)" onclick="viewDoc('${docUrl}')"></div>
+              <div style="font-size:12px;margin-top:4px;">Doc ${i+1}</div>
+            </div>`
+          ).join('');
+
+          html += `
+            <div class="pro-card">
+              <div class="pro-avatar">${(pro.name || 'P').charAt(0).toUpperCase()}</div>
+              <div class="pro-info">
+                <div class="pro-name">${escapeHtml(pro.name || 'N/D')}</div>
+                <div class="pro-email">${pro.email || ''}</div>
+                <div class="pro-meta">
+                  <span>Serviço: ${pro.spec || 'N/D'}</span>
+                  <span>${pro.phone || ''}</span>
+                  <span>Cadastrado: ${pro.createdAt ? pro.createdAt.toDate().toLocaleDateString('pt-BR') : 'N/D'}</span>
+                </div>
+                <div style="margin-bottom:12px">
+                  <span class="status-badge ${statusClass}">${pro.docsStatus?.toUpperCase() || 'PENDENTE'}</span>
+                </div>
+                <div class="docs-grid">${docsHtml}</div>
+                <div style="display:flex;gap:12px;">
+                  <button class="btn btn-approve" onclick="approvePro('${docId}')">✅ Aprovar</button>
+                  <button class="btn btn-reject" onclick="rejectPro('${docId}')">❌ Rejeitar</button>
+                  <button class="btn" onclick="viewAllDocs('${docId}')" style="background:#6b7280;color:white;">Ver Todos</button>
+                </div>
+              </div>
+            </div>`;
+        });
+        content.innerHTML = html;
+      } catch (e) {
+        console.error('Load pros failed:', e);
+        document.getElementById('content').innerHTML = '<div style="text-align:center;padding:40px;color:var(--red);">Erro ao carregar. <button onclick="loadPendingPros()">Tentar novamente</button></div>';
+      }
+    }
+
+    async function approvePro(docId) {
+      if (!confirm('Aprovar este profissional?')) return;
+      const btn = event.target;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Aprovando...';
+      
+      try {
+        await db.collection('professionals').doc(docId).update({
+          docsStatus: 'approved',
+          approvedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        toast('✅ Aprovado!');
+        loadPendingPros();
+      } catch (e) {
+        console.error('Approve failed:', e);
+        toast('Erro: ' + e.message, 'err');
+        btn.disabled = false;
+        btn.innerHTML = '✅ Aprovar';
+      }
+    }
+
+    async function rejectPro(docId) {
+      const reason = prompt('Motivo da rejeição (opcional):');
+      if (!confirm('Rejeitar este profissional?' + (reason ? `\n\nMotivo: ${reason}` : ''))) return;
+      
+      const btn = event.target;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Rejeitando...';
+      
+      try {
+        await db.collection('professionals').doc(docId).update({
+          docsStatus: 'rejected',
+          rejectedReason: reason || null,
+          rejectedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        toast('❌ Rejeitado!');
+        loadPendingPros();
+      } catch (e) {
+        console.error('Reject failed:', e);
+        toast('Erro: ' + e.message, 'err');
+        btn.disabled = false;
+        btn.innerHTML = '❌ Rejeitar';
+      }
+    }
+
+    function viewDoc(url) {
+      window.open(url, '_blank');
+    }
+
+    async function viewAllDocs(docId) {
+      try {
+        const pro = await db.collection('professionals').doc(docId).get();
+        if (pro.exists) {
+          const docs = pro.data().docs || [];
+          let html = '<div style="text-align:center;">Documentos:<div>';
+          docs.forEach((url, i) => {
+            html += `<br><a href="${url}" target="_blank">Ver Doc ${i+1}</a>`;
+          });
+          alert(html);
+        }
+      } catch (e) {
+        console.error('View docs failed:', e);
+      }
+    }
+
+    function logout() {
+      auth.signOut();
+    }
+
+    function toast(msg, type = 'ok') {
+      // Simple toast (can be enhanced)
+      const t = document.createElement('div');
+      t.style.cssText = `
+        position:fixed;top:20px;right:20px;padding:16px 20px;background:${
+          type === 'ok' ? '#10b981' : '#ef4444'
+        };color:white;border-radius:8px;font-weight:600;z-index:10000;box-shadow:0 4px 12px rgba(0,0,0,.15);
+        animation:slideIn .3s ease-out;`;
+      t.textContent = msg;
+      document.body.appendChild(t);
+      setTimeout(() => {
+        t.style.animation = 'slideOut .3s ease-in forwards';
+        setTimeout(() => t.remove(), 300);
+      }, 3000);
+    }
+
+    // Escape HTML
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+  </script>
 </body>
 </html>

@@ -1,3 +1,10 @@
+// === SECURE CODE HASHING ===
+async function hashCode(code) {
+  const enc = new TextEncoder().encode(code + '_maridao_salt_2025');
+  const buf = await crypto.subtle.digest('SHA-256', enc);
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 // === PRO DASHBOARD STATE ===
 let currentProfessional = null;
 let proRequestsListener  = null;
@@ -1334,7 +1341,7 @@ function sendProProposal() {
 
 // Input helper: move para próximo campo de código
 function pArrNext(el, i, bookingId) {
-  el.value = el.value.replace(/\D/g, '');
+el.value = el.value.trim();
   if (el.value && i < 4) {
     const next = document.getElementById('pAC' + (i + 1) + '-' + bookingId);
     if (next) next.focus();
@@ -1359,9 +1366,9 @@ async function proMarkOnWay(bookingId) {
 // === VERIFICAR CÓDIGO DE CHEGADA (digitado pelo profissional) ===
 async function proVerifyArrival(bookingId) {
   const verBtn = event && event.target; if (verBtn) { verBtn.disabled = true; verBtn.textContent = '⏳...'; }
-  const digits = [1, 2, 3, 4].map(i => {
+const digits = [1, 2, 3, 4].map(i => {
     const el = document.getElementById('pAC' + i + '-' + bookingId);
-    return el ? el.value.trim().replace(/\D/g, '') : '';
+    return el ? (el.value || '').trim() : '';
   });
   const code = digits.join('');
 
@@ -1636,8 +1643,8 @@ function _openArrivalCodeModal(bookingId) {
 }
 
 function _proArrModalNext(el, i) {
-  el.value = el.value.replace(/\D/g, '');
-  if (el.value && i < 4) {
+  el.value = el.value.trim();
+    if (el.value && i < 4) {
     const next = document.getElementById('proArr' + (i + 1));
     if (next) next.focus();
   }
@@ -1649,8 +1656,7 @@ function _closeArrivalModal() {
 }
 
 async function _submitArrivalCode(bookingId) {
-  // trim() + replace(/\D/g,'') remove espaços invisíveis que o teclado mobile insere
-  const code = [1, 2, 3, 4].map(i => (document.getElementById('proArr' + i).value || '').trim().replace(/\D/g, '')).join('');
+  const code = [1, 2, 3, 4].map(i => (document.getElementById('proArr' + i).value || '').trim()).join('');
   if (!/^\d{4}$/.test(code)) { toast('Digite os 4 dígitos', 'err'); return; }
 
   const btn = document.getElementById('proArrModalBtn');
