@@ -495,6 +495,7 @@ Cancelamentos em cima da hora podem resultar em avaliação negativa e suspensã
 <button class="md-close" onclick="closeM('chatM')" style="position:static;background:none;color:var(--text2)">✕</button>
 </div>
 <div class="chat-sec">🔒 Contatos externos bloqueados. Combine tudo aqui e pague pelo app!</div>
+<div id="chatStatusBanner" style="display:none;padding:10px 14px;font-size:.82rem;font-weight:600;border-bottom:1px solid var(--border)"></div>
 <div id="chatBlindReveal" style="display:none;padding:10px 14px;border-bottom:2px solid var(--p);background:var(--pl)"></div>
 <div class="chat-msgs" id="chatMsgs"></div>
 <div id="chatQuickAccept" style="display:none;padding:8px 14px;border-top:2px solid var(--p);background:var(--pl)"></div>
@@ -529,6 +530,7 @@ Cancelamentos em cima da hora podem resultar em avaliação negativa e suspensã
 <div class="chat-sec">🔒 Combine tudo aqui. Após acordo, o cliente paga pelo app (taxa 8%, você recebe 92%).</div>
 <div id="proBlindReveal" style="display:none;padding:10px 14px;border-bottom:2px solid var(--p);background:var(--pl)"></div>
 <div class="chat-msgs" id="proChatMsgs"></div>
+<div id="proChatActionArea" style="display:none;padding:12px 14px;border-top:2px solid #059669;background:#D1FAE5"></div>
 <div id="proClientProposalAccept" style="display:none;padding:8px 14px;border-top:2px solid var(--p);background:var(--pl)"></div>
 <div id="proProposeArea" style="display:none;padding:8px 14px;border-top:1px solid var(--border);background:var(--bg2)">
   <div style="font-size:.75rem;font-weight:700;color:var(--text2);margin-bottom:6px">💰 Propor valor ao cliente:</div>
@@ -548,9 +550,9 @@ Cancelamentos em cima da hora podem resultar em avaliação negativa e suspensã
 
 <!-- CLIENT CHATS MODAL -->
 <div class="mo" id="clientChatsM"><div class="md" style="max-width:480px">
-<button class="md-close" onclick="closeM('clientChatsM')">✕</button>
-<h3>💬 Meus chats</h3>
-<p class="msub">Seus pedidos e conversas com profissionais.</p>
+<button class="md-close" onclick="closeClientChatsM()">✕</button>
+<h3>📋 Meus Serviços</h3>
+<p class="msub">Acompanhe seus serviços e conversas.</p>
 <div id="clientChatsList" style="display:flex;flex-direction:column;gap:10px;margin-top:16px">
   <div style="text-align:center;padding:32px;color:var(--text2)">⏳ Carregando...</div>
 </div>

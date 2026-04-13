@@ -964,6 +964,10 @@ function cleanupProDashboard() {
     _proChatListener();
     _proChatListener = null;
   }
+  if (_proBookingDocListener) {
+    _proBookingDocListener();
+    _proBookingDocListener = null;
+  }
   currentProfessional = null;
   if (typeof showClientView === 'function') showClientView();
 }
@@ -973,6 +977,7 @@ let _proChatListener = null;
 let _proChatBookingId = null;
 let _proSeenMsgIds = new Set();
 let _proPendingSeqs = new Set(); // renderização otimista do pro
+let _proBookingDocListener = null; // listener no documento do booking para sync de status
 
 async function openProChat(bookingId) {
   if (!CU || !currentProfessional) return;
@@ -980,8 +985,11 @@ async function openProChat(bookingId) {
   _proSeenMsgIds = new Set();
   _proPendingSeqs = new Set();
   if (_proChatListener) { _proChatListener(); _proChatListener = null; }
+  if (_proBookingDocListener) { _proBookingDocListener(); _proBookingDocListener = null; }
 
   document.getElementById('proChatMsgs').innerHTML = '';
+  const actionArea = document.getElementById('proChatActionArea');
+  if (actionArea) { actionArea.style.display = 'none'; actionArea.innerHTML = ''; }
   document.getElementById('proChatNm').textContent = 'Cliente';
   document.getElementById('proChatAddr').textContent = '';
   document.getElementById('proChatSvc').textContent = '';
@@ -1011,6 +1019,13 @@ async function openProChat(bookingId) {
   } catch (e) {
     console.error('booking fetch error:', e);
   }
+
+  // === LISTENER REAL-TIME NO BOOKING — sync de status (pagamento, chegada, conclusão) ===
+  _proBookingDocListener = db.collection('bookings').doc(bookingId).onSnapshot(snap => {
+    if (!snap.exists) return;
+    const bk = snap.data();
+    _updateProChatActions(bookingId, bk);
+  }, err => console.error('pro booking doc listener:', err));
 
   // Real-time listener for ALL messages on this booking
   _proChatListener = db.collection('messages')
@@ -1064,11 +1079,14 @@ async function openProChat(bookingId) {
 
 function closeProChat() {
   if (_proChatListener) { _proChatListener(); _proChatListener = null; }
+  if (_proBookingDocListener) { _proBookingDocListener(); _proBookingDocListener = null; }
   _proChatBookingId = null;
   _proSeenMsgIds = new Set();
   _proPendingSeqs = new Set();
   const acceptArea = document.getElementById('proClientProposalAccept');
   if (acceptArea) { acceptArea.style.display = 'none'; acceptArea.innerHTML = ''; }
+  const actionArea = document.getElementById('proChatActionArea');
+  if (actionArea) { actionArea.style.display = 'none'; actionArea.innerHTML = ''; }
   closeM('proChatM');
 }
 
@@ -1442,4 +1460,170 @@ function sendProRevReject(clientBudget) {
   const pa = document.getElementById('proProposeArea');
   if (pa) { pa.style.display = 'block'; const vi = document.getElementById('proProposeVal'); if (vi) { vi.value = Math.round(val); onProPriceInput(); } }
   toast('Recusa enviada com contra-proposta 💬', 'ok');
+}
+
+// ====================================================================
+// === PRO CHAT — AÇÕES EM TEMPO REAL (pagamento → chegada → conclusão)
+// ====================================================================
+
+// Atualiza a área de ação no chat do profissional baseado no status do booking.
+// Chamado pelo onSnapshot no documento do booking.
+function _updateProChatActions(bookingId, bk) {
+  const area = document.getElementById('proChatActionArea');
+  if (!area) return;
+
+  // Trava negociação quando pago
+  if (bk.status === 'payment_confirmed' || bk.trackStatus === 'paid' || bk.trackStatus === 'pro_on_way' || bk.trackStatus === 'pro_arrived') {
+    const proposeArea = document.getElementById('proProposeArea');
+    if (proposeArea) proposeArea.style.display = 'none';
+    const acceptArea = document.getElementById('proClientProposalAccept');
+    if (acceptArea) acceptArea.style.display = 'none';
+    const reveal = document.getElementById('proBlindReveal');
+    if (reveal) reveal.style.display = 'none';
+  }
+
+  if (bk.status === 'payment_confirmed' && (!bk.trackStatus || bk.trackStatus === 'paid')) {
+    area.style.display = 'block';
+    area.style.background = '#D1FAE5'; area.style.borderColor = '#059669';
+    area.innerHTML =
+      '<div style="text-align:center">' +
+        '<div style="font-size:.82rem;font-weight:700;color:#059669;margin-bottom:6px">💳 Pagamento confirmado! R$ ' + (bk.agreedPrice || 0) + ',00</div>' +
+        '<div style="font-size:.75rem;color:var(--text2);margin-bottom:12px">Vá até o local e confirme sua chegada com o código do cliente.</div>' +
+        '<button onclick="_openArrivalCodeModal(\'' + bookingId + '\')" style="width:100%;padding:12px;border-radius:var(--rs);background:var(--p);color:#fff;font-weight:700;border:none;cursor:pointer;font-size:.95rem">🔑 Confirmar Chegada</button>' +
+      '</div>';
+  } else if (bk.trackStatus === 'pro_on_way') {
+    area.style.display = 'block';
+    area.style.background = '#FFF7ED'; area.style.borderColor = '#F97316';
+    area.innerHTML =
+      '<div style="text-align:center">' +
+        '<div style="font-size:.82rem;font-weight:700;color:#F97316;margin-bottom:6px">🚗 Você está a caminho!</div>' +
+        '<div style="font-size:.75rem;color:var(--text2);margin-bottom:12px">Chegou? Digite o código que o cliente mostrar.</div>' +
+        '<button onclick="_openArrivalCodeModal(\'' + bookingId + '\')" style="width:100%;padding:12px;border-radius:var(--rs);background:var(--p);color:#fff;font-weight:700;border:none;cursor:pointer;font-size:.95rem">🔑 Confirmar Chegada</button>' +
+      '</div>';
+  } else if (bk.trackStatus === 'pro_arrived') {
+    area.style.display = 'block';
+    area.style.background = '#DBEAFE'; area.style.borderColor = '#3B82F6';
+    area.innerHTML =
+      '<div style="text-align:center">' +
+        '<div style="font-size:.82rem;font-weight:700;color:#3B82F6;margin-bottom:6px">🔧 Serviço em andamento!</div>' +
+        '<div style="font-size:.75rem;color:var(--text2);margin-bottom:12px">Conclua o serviço e mostre o código ao cliente.</div>' +
+        '<button onclick="proFinishService(\'' + bookingId + '\')" style="width:100%;padding:12px;border-radius:var(--rs);background:#059669;color:#fff;font-weight:700;border:none;cursor:pointer;font-size:.95rem">✅ Finalizar Serviço</button>' +
+      '</div>';
+  } else if (bk.trackStatus === 'completed') {
+    area.style.display = 'block';
+    area.style.background = '#D1FAE5'; area.style.borderColor = '#059669';
+    area.innerHTML =
+      '<div style="text-align:center">' +
+        '<div style="font-size:2rem;margin-bottom:6px">🎉</div>' +
+        '<div style="font-size:.85rem;font-weight:700;color:#059669">Serviço concluído!</div>' +
+        '<div style="font-size:.75rem;color:var(--text2);margin-top:4px">Pagamento creditado na sua conta.</div>' +
+      '</div>';
+  } else {
+    area.style.display = 'none';
+  }
+}
+
+// === MODAL DE CÓDIGO DE CHEGADA (pro digita o código que o cliente mostra) ===
+function _openArrivalCodeModal(bookingId) {
+  const existing = document.getElementById('proArrivalModal');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'proArrivalModal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px';
+
+  modal.innerHTML =
+    '<div style="background:var(--bg);border-radius:var(--r);padding:28px 24px;max-width:360px;width:100%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.3)">' +
+      '<div style="font-size:2rem;margin-bottom:8px">🔑</div>' +
+      '<h3 style="margin:0 0 6px">Confirmar Chegada</h3>' +
+      '<p style="font-size:.85rem;color:var(--text2);margin-bottom:20px">Digite o código de 4 dígitos que o cliente mostrará na tela dele.</p>' +
+      '<div style="display:flex;gap:8px;justify-content:center;margin-bottom:12px">' +
+        '<input id="proArr1" type="text" maxlength="1" inputmode="numeric" style="width:52px;height:58px;text-align:center;font-size:1.5rem;font-weight:800;border:2px solid var(--border);border-radius:12px;background:var(--bg2);color:var(--text)" oninput="_proArrModalNext(this,1)">' +
+        '<input id="proArr2" type="text" maxlength="1" inputmode="numeric" style="width:52px;height:58px;text-align:center;font-size:1.5rem;font-weight:800;border:2px solid var(--border);border-radius:12px;background:var(--bg2);color:var(--text)" oninput="_proArrModalNext(this,2)">' +
+        '<input id="proArr3" type="text" maxlength="1" inputmode="numeric" style="width:52px;height:58px;text-align:center;font-size:1.5rem;font-weight:800;border:2px solid var(--border);border-radius:12px;background:var(--bg2);color:var(--text)" oninput="_proArrModalNext(this,3)">' +
+        '<input id="proArr4" type="text" maxlength="1" inputmode="numeric" style="width:52px;height:58px;text-align:center;font-size:1.5rem;font-weight:800;border:2px solid var(--border);border-radius:12px;background:var(--bg2);color:var(--text)" oninput="_proArrModalNext(this,4)">' +
+      '</div>' +
+      '<div id="proArrModalErr" style="display:none;color:var(--red);font-size:.82rem;margin-bottom:8px">❌ Código incorreto. Peça ao cliente novamente.</div>' +
+      '<button id="proArrModalBtn" onclick="_submitArrivalCode(\'' + bookingId + '\')" style="width:100%;padding:12px;border-radius:var(--rs);background:var(--p);color:#fff;font-weight:700;border:none;cursor:pointer;font-size:.95rem;margin-bottom:8px">Confirmar ✅</button>' +
+      '<button onclick="_closeArrivalModal()" style="width:100%;padding:10px;border-radius:var(--rs);background:var(--bg2);color:var(--text2);font-weight:600;border:1px solid var(--border);cursor:pointer;font-size:.85rem">Cancelar</button>' +
+    '</div>';
+
+  document.body.appendChild(modal);
+  modal.addEventListener('click', e => { if (e.target === modal) _closeArrivalModal(); });
+  setTimeout(() => { const f = document.getElementById('proArr1'); if (f) f.focus(); }, 100);
+}
+
+function _proArrModalNext(el, i) {
+  el.value = el.value.replace(/\D/g, '');
+  if (el.value && i < 4) {
+    const next = document.getElementById('proArr' + (i + 1));
+    if (next) next.focus();
+  }
+}
+
+function _closeArrivalModal() {
+  const modal = document.getElementById('proArrivalModal');
+  if (modal) modal.remove();
+}
+
+async function _submitArrivalCode(bookingId) {
+  const code = [1, 2, 3, 4].map(i => (document.getElementById('proArr' + i).value || '')).join('');
+  if (!/^\d{4}$/.test(code)) { toast('Digite os 4 dígitos', 'err'); return; }
+
+  const btn = document.getElementById('proArrModalBtn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Verificando...'; }
+
+  try {
+    // Validação via API/Worker
+    const res = await safeFetch(API_URL + '/api/verify-code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bookingId: bookingId, type: 'arrival', code: code })
+    }, 15000);
+
+    const data = await res.json();
+    if (!data.ok) {
+      document.getElementById('proArrModalErr').style.display = 'block';
+      [1, 2, 3, 4].forEach(i => { const el = document.getElementById('proArr' + i); if (el) el.value = ''; });
+      const f = document.getElementById('proArr1'); if (f) f.focus();
+      if (btn) { btn.disabled = false; btn.textContent = 'Confirmar ✅'; }
+      return;
+    }
+
+    // API já atualizou o booking — o onSnapshot vai atualizar a UI
+    _closeArrivalModal();
+    toast('Chegada confirmada! Inicie o serviço 🔧', 'ok');
+    loadAcceptedRequests(); // atualiza aba "Em andamento" do dashboard
+
+  } catch (e) {
+    // Fallback: verificação local (se API não responder)
+    console.warn('verify-code API fail, trying local fallback:', e);
+    try {
+      const snap = await db.collection('bookings').doc(bookingId).get();
+      if (!snap.exists) { toast('Reserva não encontrada', 'err'); if (btn) { btn.disabled = false; btn.textContent = 'Confirmar ✅'; } return; }
+      const bk = snap.data();
+      if (!bk.arrCodeHash) { toast('Código não disponível', 'err'); if (btn) { btn.disabled = false; btn.textContent = 'Confirmar ✅'; } return; }
+
+      const enteredHash = await hashCode(code);
+      if (enteredHash !== bk.arrCodeHash) {
+        document.getElementById('proArrModalErr').style.display = 'block';
+        [1, 2, 3, 4].forEach(i => { const el = document.getElementById('proArr' + i); if (el) el.value = ''; });
+        const f = document.getElementById('proArr1'); if (f) f.focus();
+        if (btn) { btn.disabled = false; btn.textContent = 'Confirmar ✅'; }
+        return;
+      }
+
+      // Verificação local OK — atualiza Firestore direto
+      await db.collection('bookings').doc(bookingId).update({
+        trackStatus: 'pro_arrived',
+        arrivedAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      _closeArrivalModal();
+      toast('Chegada confirmada! Inicie o serviço 🔧', 'ok');
+      loadAcceptedRequests();
+    } catch (e2) {
+      toast('Erro ao verificar código: ' + e2.message, 'err');
+      if (btn) { btn.disabled = false; btn.textContent = 'Confirmar ✅'; }
+    }
+  }
 }

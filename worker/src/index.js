@@ -646,7 +646,12 @@ async function handleVerifyCode(request, env) {
   const hash = await sha256Hex(code);
   if (!expected || expected !== hash) return json({ ok: false }, 200);
 
-  if (type === 'completion') {
+  if (type === 'arrival') {
+    await firestorePatch(env, 'bookings', bookingId, {
+      trackStatus: 'pro_arrived',
+      arrivedAt: new Date()
+    });
+  } else if (type === 'completion') {
     await firestorePatch(env, 'bookings', bookingId, {
       status: 'completed',
       trackStatus: 'completed',
