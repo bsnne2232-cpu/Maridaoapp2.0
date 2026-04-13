@@ -200,7 +200,7 @@ function cNext(el, i) { el.value = el.value.replace(/\D/g, ''); if (el.value && 
 // === LEGACY ARRIVAL VERIFY (kept for fallback) ===
 async function verifyArr() {
   if (!checkAttempts('arr')) return;
-  const v = [1, 2, 3, 4].map(i => document.getElementById('aI' + i).value).join('');
+  const v = [1, 2, 3, 4].map(i => (document.getElementById('aI' + i).value || '').trim().replace(/\D/g, '')).join('');
   const vHash = await hashCode(v);
 
   if (!trackingState.arrHash) {
@@ -227,7 +227,7 @@ async function verifyArr() {
 // === COMPLETION CODE VERIFY ===
 async function verifyComp() {
   if (!checkAttempts('comp')) return;
-  const v = [1, 2, 3, 4].map(i => document.getElementById('cI' + i).value).join('');
+  const v = [1, 2, 3, 4].map(i => (document.getElementById('cI' + i).value || '').trim().replace(/\D/g, '')).join('');
 
   // Primary: in-memory hash
   if (trackingState.compHash) {

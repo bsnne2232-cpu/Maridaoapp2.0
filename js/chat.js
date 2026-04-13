@@ -875,7 +875,8 @@ function _renderClientBookings(snap) {
 
   // Agrupa por categoria
   const cats = {
-    pagos: filtered.filter(bk => bk.status === 'payment_confirmed' && bk.trackStatus !== 'pro_arrived' && bk.trackStatus !== 'completed'),
+    pagos: filtered.filter(bk => bk.status === 'payment_confirmed' && (!bk.trackStatus || bk.trackStatus === 'paid') && bk.trackStatus !== 'completed'),
+    acaminho: filtered.filter(bk => bk.trackStatus === 'pro_on_way'),
     andamento: filtered.filter(bk => bk.trackStatus === 'pro_arrived'),
     chats: filtered.filter(bk => ['chat', 'accepted', 'payment_pending'].includes(bk.status)),
     finalizados: filtered.filter(bk => bk.status === 'completed')
@@ -885,6 +886,7 @@ function _renderClientBookings(snap) {
   let tab = _clientBookingsActiveTab;
   if (!cats[tab] || cats[tab].length === 0) {
     if (cats.pagos.length > 0) tab = 'pagos';
+    else if (cats.acaminho.length > 0) tab = 'acaminho';
     else if (cats.andamento.length > 0) tab = 'andamento';
     else if (cats.chats.length > 0) tab = 'chats';
     else tab = 'finalizados';
@@ -897,6 +899,7 @@ function _renderClientBookings(snap) {
   tabs.style.cssText = 'display:flex;gap:4px;margin-bottom:14px;overflow-x:auto;padding-bottom:4px';
   const tabDefs = [
     { key: 'pagos', label: '💳 Pagos', count: cats.pagos.length },
+    { key: 'acaminho', label: '🚗 A caminho', count: cats.acaminho.length },
     { key: 'andamento', label: '🔧 Em Andamento', count: cats.andamento.length },
     { key: 'chats', label: '💬 Chats', count: cats.chats.length },
     { key: 'finalizados', label: '🏆 Finalizados', count: cats.finalizados.length }
@@ -934,7 +937,7 @@ function _switchClientTab(tab) {
     btn.style.background = active ? 'var(--p)' : 'var(--bg)';
     btn.style.color = active ? '#fff' : 'var(--text2)';
   });
-  ['pagos', 'andamento', 'chats', 'finalizados'].forEach(key => {
+  ['pagos', 'acaminho', 'andamento', 'chats', 'finalizados'].forEach(key => {
     const el = document.getElementById('cli-tab-' + key);
     if (el) el.style.display = key === tab ? 'flex' : 'none';
   });

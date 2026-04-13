@@ -978,6 +978,7 @@ let _proChatBookingId = null;
 let _proSeenMsgIds = new Set();
 let _proPendingSeqs = new Set(); // renderização otimista do pro
 let _proBookingDocListener = null; // listener no documento do booking para sync de status
+let _proChatBookingStatus = null;  // trackStatus corrente para bloquear chat quando concluído
 
 async function openProChat(bookingId) {
   if (!CU || !currentProfessional) return;
@@ -990,6 +991,11 @@ async function openProChat(bookingId) {
   document.getElementById('proChatMsgs').innerHTML = '';
   const actionArea = document.getElementById('proChatActionArea');
   if (actionArea) { actionArea.style.display = 'none'; actionArea.innerHTML = ''; }
+  // Reset chat input (pode ter ficado desabilitado de um chat concluído)
+  const chatInEl = document.getElementById('proChatIn');
+  if (chatInEl) { chatInEl.disabled = false; chatInEl.placeholder = 'Responda ao cliente...'; chatInEl.value = ''; }
+  const chatSendEl = document.getElementById('proChatSendBtn');
+  if (chatSendEl) chatSendEl.disabled = false;
   document.getElementById('proChatNm').textContent = 'Cliente';
   document.getElementById('proChatAddr').textContent = '';
   document.getElementById('proChatSvc').textContent = '';
@@ -1021,9 +1027,11 @@ async function openProChat(bookingId) {
   }
 
   // === LISTENER REAL-TIME NO BOOKING — sync de status (pagamento, chegada, conclusão) ===
+  _proChatBookingStatus = null;
   _proBookingDocListener = db.collection('bookings').doc(bookingId).onSnapshot(snap => {
     if (!snap.exists) return;
     const bk = snap.data();
+    _proChatBookingStatus = bk.trackStatus || bk.status || null;
     _updateProChatActions(bookingId, bk);
   }, err => console.error('pro booking doc listener:', err));
 
@@ -1081,6 +1089,7 @@ function closeProChat() {
   if (_proChatListener) { _proChatListener(); _proChatListener = null; }
   if (_proBookingDocListener) { _proBookingDocListener(); _proBookingDocListener = null; }
   _proChatBookingId = null;
+  _proChatBookingStatus = null;
   _proSeenMsgIds = new Set();
   _proPendingSeqs = new Set();
   const acceptArea = document.getElementById('proClientProposalAccept');
@@ -1102,6 +1111,10 @@ function _proAddMsg(text, cls) {
 }
 
 function sendProMsg() {
+  if (_proChatBookingStatus === 'completed') {
+    toast('Chat encerrado — serviço concluído.', 'err');
+    return;
+  }
   const inp = document.getElementById('proChatIn'), msg = inp.value.trim();
   if (!msg || !_proChatBookingId || !CU || !currentProfessional) return;
   inp.value = '';
@@ -1160,6 +1173,8 @@ function buildProNegoBox(clientPrice) {
 // === PRO ACEITA PROPOSTA DO CLIENTE ===
 function proAcceptClientProposal(price) {
   if (!_proChatBookingId || !CU || !currentProfessional) return;
+  // Desabilita botões imediatamente para evitar duplo-clique
+  document.querySelectorAll('.nego-accept, .nego-reject, .nego-counter').forEach(b => { b.disabled = true; b.style.opacity = '.5'; });
   const msg = '✅ Aceito sua proposta de R$ ' + price + ',00! Pode pagar pelo app.';
   const seq = Date.now();
   _proPendingSeqs.add(seq);
@@ -1173,6 +1188,8 @@ function proAcceptClientProposal(price) {
   db.collection('bookings').doc(_proChatBookingId).update({ lastProPosal: price }).catch(() => {});
   const acceptArea = document.getElementById('proClientProposalAccept');
   if (acceptArea) acceptArea.style.display = 'none';
+  const proposeArea = document.getElementById('proProposeArea');
+  if (proposeArea) proposeArea.style.display = 'none';
   toast('Aceite enviado! Aguardando pagamento do cliente 💰', 'ok');
 }
 
@@ -1248,6 +1265,8 @@ function sendProProposal() {
   const valEl = document.getElementById('proProposeVal');
   const val = parseFloat(valEl.value);
   if (!val || val < 10 || val > 10000) { toast('Valor inválido (entre R$ 10 e R$ 10.000)', 'err'); return; }
+  // Desabilita botões para evitar duplo-clique
+  document.querySelectorAll('#proProposeArea button').forEach(b => { b.disabled = true; b.style.opacity = '.5'; });
   const proReceives = (val * 0.92).toFixed(0);
   const msg = '💰 Proposta: R$ ' + val.toFixed(0) + ',00\n\nResponda "aceito" para confirmar!';
   const seq = Date.now();
@@ -1303,7 +1322,7 @@ async function proMarkOnWay(bookingId) {
 async function proVerifyArrival(bookingId) {
   const digits = [1, 2, 3, 4].map(i => {
     const el = document.getElementById('pAC' + i + '-' + bookingId);
-    return el ? el.value.trim() : '';
+    return el ? el.value.trim().replace(/\D/g, '') : '';
   });
   const code = digits.join('');
 
@@ -1472,14 +1491,37 @@ function _updateProChatActions(bookingId, bk) {
   const area = document.getElementById('proChatActionArea');
   if (!area) return;
 
-  // Trava negociação quando pago
-  if (bk.status === 'payment_confirmed' || bk.trackStatus === 'paid' || bk.trackStatus === 'pro_on_way' || bk.trackStatus === 'pro_arrived') {
+  // Trava negociação quando preço foi acordado OU pago
+  if (bk.agreedPrice || bk.status === 'payment_confirmed' || bk.trackStatus === 'paid' || bk.trackStatus === 'pro_on_way' || bk.trackStatus === 'pro_arrived' || bk.trackStatus === 'completed') {
     const proposeArea = document.getElementById('proProposeArea');
     if (proposeArea) proposeArea.style.display = 'none';
     const acceptArea = document.getElementById('proClientProposalAccept');
     if (acceptArea) acceptArea.style.display = 'none';
     const reveal = document.getElementById('proBlindReveal');
     if (reveal) reveal.style.display = 'none';
+  }
+
+  // Desabilita input do chat quando concluído
+  const chatIn = document.getElementById('proChatIn');
+  const chatSendBtn = document.getElementById('proChatSendBtn');
+  if (bk.trackStatus === 'completed') {
+    if (chatIn) { chatIn.disabled = true; chatIn.placeholder = 'Chat encerrado — serviço concluído'; }
+    if (chatSendBtn) chatSendBtn.disabled = true;
+  } else {
+    if (chatIn) { chatIn.disabled = false; chatIn.placeholder = 'Digite...'; }
+    if (chatSendBtn) chatSendBtn.disabled = false;
+  }
+
+  // Estado: preço acordado mas ainda não pagou
+  if (bk.agreedPrice && bk.status !== 'payment_confirmed' && bk.status !== 'completed' && !bk.trackStatus) {
+    area.style.display = 'block';
+    area.style.background = '#FEF3C7'; area.style.borderColor = '#F59E0B';
+    area.innerHTML =
+      '<div style="text-align:center;padding:8px">' +
+        '<div style="font-size:.82rem;font-weight:700;color:#D97706;margin-bottom:4px">⏳ Negociação concluída — R$ ' + bk.agreedPrice + ',00</div>' +
+        '<div style="font-size:.75rem;color:var(--text2)">Aguardando pagamento do cliente...</div>' +
+      '</div>';
+    return;
   }
 
   if (bk.status === 'payment_confirmed' && (!bk.trackStatus || bk.trackStatus === 'paid')) {
@@ -1567,7 +1609,8 @@ function _closeArrivalModal() {
 }
 
 async function _submitArrivalCode(bookingId) {
-  const code = [1, 2, 3, 4].map(i => (document.getElementById('proArr' + i).value || '')).join('');
+  // trim() + replace(/\D/g,'') remove espaços invisíveis que o teclado mobile insere
+  const code = [1, 2, 3, 4].map(i => (document.getElementById('proArr' + i).value || '').trim().replace(/\D/g, '')).join('');
   if (!/^\d{4}$/.test(code)) { toast('Digite os 4 dígitos', 'err'); return; }
 
   const btn = document.getElementById('proArrModalBtn');
