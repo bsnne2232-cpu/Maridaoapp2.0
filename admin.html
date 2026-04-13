@@ -82,7 +82,7 @@
 
   <div class="tabs">
     <button class="tab active" data-tab="pending" onclick="switchTab('pending')">Aguardando aprovação</button>
-    <button class="tab" data-tab="active" onclick="switchTab('active')">Aprovados</button>
+    <button class="tab" data-tab="approved" onclick="switchTab('approved')">Aprovados</button>
     <button class="tab" data-tab="rejected" onclick="switchTab('rejected')">Rejeitados</button>
   </div>
 
@@ -201,7 +201,7 @@ async function loadList(){
 function esc(s){ const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
 
 function renderCard(id, p){
-  const statusBadge = p.docsStatus === 'pending' ? 'pending' : (p.docsStatus === 'active' ? 'active' : 'rejected');
+  const statusBadge = p.docsStatus === 'pending' ? 'pending' : (p.docsStatus === 'approved' ? 'active' : 'rejected');
   const actions = currentTab === 'pending'
     ? `<div class="actions">
          <button class="btn btn-err" onclick="reject('${id}')">Rejeitar</button>
@@ -268,7 +268,7 @@ async function approve(id){
   if (!confirm('Aprovar este profissional? Ele ficará visível publicamente.')) return;
   try {
     await db.collection('professionals').doc(id).update({
-      docsStatus: 'active',
+      docsStatus: 'approved',
       status: 'active',
       approvedAt: firebase.firestore.FieldValue.serverTimestamp(),
       approvedBy: auth.currentUser.uid

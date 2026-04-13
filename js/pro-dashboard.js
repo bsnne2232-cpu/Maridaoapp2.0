@@ -561,7 +561,7 @@ async function loadCompletedRequests() {
     docs.forEach(booking => {
       const completedDate = booking.completedAt ? booking.completedAt.toDate() : new Date();
       const dateStr = completedDate.toLocaleDateString('pt-BR');
-      const earned = booking.price ? (booking.price * 0.92).toFixed(2) : '—';
+      const earned = booking.netToProCents ? (booking.netToProCents / 100).toFixed(2) : (booking.agreedPrice || booking.price ? (Math.round((booking.agreedPrice || booking.price) * 0.92 * 100) / 100).toFixed(2) : '—');
 
       const card = document.createElement('div');
       card.className = 'pro-request-card';
@@ -599,7 +599,7 @@ async function loadEarningsData() {
     let totalEarnings = 0, totalCount = 0;
 
     completedDocs.forEach(d => {
-      const net = d.netToProCents ? d.netToProCents / 100 : (d.agreedPrice || d.price || 0) * 0.92;
+      const net = d.netToProCents ? d.netToProCents / 100 : Math.round((d.agreedPrice || d.price || 0) * 0.92 * 100) / 100;
       totalEarnings += net;
       totalCount++;
       const at = d.completedAt ? d.completedAt.toDate() : null;
@@ -637,7 +637,7 @@ async function loadEarningsData() {
       const date   = booking.completedAt ? booking.completedAt.toDate() : new Date();
       const earned = booking.netToProCents
         ? (booking.netToProCents / 100).toFixed(2)
-        : ((booking.agreedPrice || booking.price || 0) * 0.92).toFixed(2);
+        : (Math.round((booking.agreedPrice || booking.price || 0) * 0.92 * 100) / 100).toFixed(2);
       const row = document.createElement('div');
       row.style.cssText = 'display:flex;justify-content:space-between;padding:10px;background:var(--bg2);border-radius:6px;align-items:center';
       row.innerHTML =
@@ -1015,11 +1015,19 @@ async function openProChat(bookingId) {
       const svc = (bk.details && bk.details.svc) || bk.service || '';
       document.getElementById('proChatSvc').textContent = svc;
 
-      // === NEGOCIAÇÃO A CEGAS: revela se ambos definiram preço ===
+      // === AUTO-ACORDO: preços iguais → fecha automaticamente ===
       const proReveal = document.getElementById('proBlindReveal');
       if (proReveal) proReveal.style.display = 'none';
-      if (bk.clientBudget && bk.proBudget && !bk.agreedPrice && typeof showBlindNegoReveal === 'function') {
-        showBlindNegoReveal(bk.clientBudget, bk.proBudget, svc, 'pro');
+      if (bk.clientBudget && bk.proBudget && !bk.agreedPrice) {
+        if (Math.round(bk.clientBudget) === Math.round(bk.proBudget)) {
+          _proAutoAgree(bk.clientBudget, bookingId);
+        } else if (typeof showBlindNegoReveal === 'function') {
+          showBlindNegoReveal(bk.clientBudget, bk.proBudget, svc, 'pro');
+        }
+      }
+      // Trava UI se já tem preço acordado ou pagamento feito
+      if (bk.agreedPrice || bk.status === 'payment_confirmed') {
+        _lockProNegotiationUI(bk);
       }
     }
   } catch (e) {
@@ -1138,7 +1146,7 @@ function sendProMsg() {
   }).catch(e => { console.error('sendProMsg error:', e); _proPendingSeqs.delete(seq); });
 }
 
-// === CONSTRÓI CAIXA DE NEGOCIAÇÃO (proposta do cliente → pro vê) ===
+// === CONSTRÓI CARD DE PROPOSTA (proposta do cliente → pro vê, sem Contrapropor) ===
 function buildProNegoBox(clientPrice) {
   const svc = (document.getElementById('proChatSvc') || {}).textContent || '';
   const range = (typeof SVC_PRICE_RANGE !== 'undefined' && SVC_PRICE_RANGE[svc]) || { min: 60, fair: 200, max: 1000 };
@@ -1152,7 +1160,7 @@ function buildProNegoBox(clientPrice) {
 
   return '<div class="nego-box">' +
     '<div class="nego-header">' +
-      '<div style="font-size:.7rem;font-weight:700;color:var(--text2);letter-spacing:.6px;margin-bottom:6px">💰 PROPOSTA DO CLIENTE</div>' +
+      '<div style="font-size:.7rem;font-weight:700;color:var(--text2);letter-spacing:.6px;margin-bottom:6px">PROPOSTA DO CLIENTE</div>' +
       '<div style="font-size:1.5rem;font-weight:800;color:var(--p)">R$ ' + clientPrice + ',00</div>' +
       '<div style="margin-top:8px">' +
         '<div style="display:flex;justify-content:space-between;font-size:.66rem;color:var(--text2);margin-bottom:2px"><span>Muito baixo</span><span>Justo (R$' + range.fair + ')</span><span>Alto</span></div>' +
@@ -1163,11 +1171,52 @@ function buildProNegoBox(clientPrice) {
       '</div>' +
     '</div>' +
     '<div class="nego-actions">' +
-      '<button class="nego-btn nego-accept" onclick="proAcceptClientProposal(' + clientPrice + ')">✅ Aceitar</button>' +
-      '<button class="nego-btn nego-reject" onclick="proRejectProposal(' + clientPrice + ')">❌ Recusar</button>' +
-      '<button class="nego-btn nego-counter" onclick="proOpenCounter(' + clientPrice + ')">💬 Contrapropor</button>' +
+      '<button class="nego-btn nego-accept" onclick="proAcceptClientProposal(' + clientPrice + ')">Aceitar R$ ' + clientPrice + '</button>' +
+      '<button class="nego-btn nego-reject" onclick="proRejectProposal(' + clientPrice + ')">Recusar</button>' +
     '</div>' +
   '</div>';
+}
+
+// === AUTO-ACORDO PRO: preços iguais → fecha automaticamente ===
+function _proAutoAgree(price, bookingId) {
+  const roundedPrice = Math.round(price);
+  // Grava no Firestore
+  db.collection('bookings').doc(bookingId).update({
+    agreedPrice: roundedPrice,
+    status: 'payment_pending',
+    priceAgreedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).catch(e => console.error('proAutoAgree update:', e));
+
+  // Mensagem de sistema
+  const sysMsg = 'Negociacao Fechada: R$ ' + roundedPrice + ',00 — Os valores propostos sao iguais!';
+  const seq = Date.now();
+  _proAddMsg(sysMsg, 'sys');
+  db.collection('messages').add({
+    bookingId: bookingId, text: sysMsg, sender: 'sys', seq,
+    at: firebase.firestore.FieldValue.serverTimestamp()
+  }).catch(() => {});
+
+  _lockProNegotiationUI({ agreedPrice: roundedPrice, status: 'payment_pending' });
+  toast('Valores iguais! Negociacao fechada em R$ ' + roundedPrice + ',00', 'ok');
+}
+
+// === TRAVA DE UI PRO: esconde TODOS os campos de negociação, mostra banner ===
+function _lockProNegotiationUI(bk) {
+  const ids = ['proBlindReveal', 'proProposeArea', 'proClientProposalAccept'];
+  ids.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+
+  if (bk && bk.agreedPrice) {
+    const area = document.getElementById('proChatActionArea');
+    if (area && !bk.trackStatus) {
+      const isPaid = bk.status === 'payment_confirmed';
+      area.style.display = 'block';
+      area.style.background = isPaid ? '#D1FAE5' : '#DBEAFE';
+      area.style.borderColor = isPaid ? '#059669' : '#3B82F6';
+      area.innerHTML = '<div style="text-align:center;padding:10px;font-weight:700;font-size:.9rem;color:' +
+        (isPaid ? '#065F46' : '#1D4ED8') + '">' +
+        (isPaid ? 'Pago' : 'Negociacao Fechada') + ': R$ ' + bk.agreedPrice + ',00</div>';
+    }
+  }
 }
 
 // === PRO ACEITA PROPOSTA DO CLIENTE ===
@@ -1237,18 +1286,6 @@ function proSendRejectWithMin(clientPrice) {
   toast('Recusa enviada com contra-proposta 💬', 'ok');
 }
 
-// === ABRIR CONTRAPROPOSTA (pro) ===
-function proOpenCounter(clientPrice) {
-  const acceptArea = document.getElementById('proClientProposalAccept');
-  if (acceptArea) acceptArea.style.display = 'none';
-  const pa = document.getElementById('proProposeArea');
-  if (pa) {
-    pa.style.display = 'block';
-    const vi = document.getElementById('proProposeVal');
-    if (vi) vi.focus();
-  }
-}
-
 // === LIVE GAUGE UPDATE — PRO PRICE INPUT ===
 function onProPriceInput() {
   const val = parseFloat(document.getElementById('proProposeVal').value);
@@ -1306,6 +1343,7 @@ function pArrNext(el, i, bookingId) {
 
 // === MARCAR "A CAMINHO" ===
 async function proMarkOnWay(bookingId) {
+  const btn = event && event.target; if (btn) { btn.disabled = true; btn.textContent = '⏳ Enviando...'; }
   try {
     await db.collection('bookings').doc(bookingId).update({
       trackStatus: 'pro_on_way',
@@ -1320,6 +1358,7 @@ async function proMarkOnWay(bookingId) {
 
 // === VERIFICAR CÓDIGO DE CHEGADA (digitado pelo profissional) ===
 async function proVerifyArrival(bookingId) {
+  const verBtn = event && event.target; if (verBtn) { verBtn.disabled = true; verBtn.textContent = '⏳...'; }
   const digits = [1, 2, 3, 4].map(i => {
     const el = document.getElementById('pAC' + i + '-' + bookingId);
     return el ? el.value.trim().replace(/\D/g, '') : '';
@@ -1343,7 +1382,7 @@ async function proVerifyArrival(bookingId) {
 
     // Hash the entered code and compare (same salt as tracking.js)
     const enteredHash = await hashCode(code);
-    if (enteredHash !== bk.arrCodeHash) {
+    if (String(enteredHash).trim() !== String(bk.arrCodeHash).trim()) {
       const errEl = document.getElementById('pArrErr-' + bookingId);
       if (errEl) errEl.style.display = 'block';
       [1, 2, 3, 4].forEach(i => {
@@ -1369,6 +1408,7 @@ async function proVerifyArrival(bookingId) {
 
 // === TERMINAR SERVIÇO — mostra código de conclusão ao profissional ===
 async function proFinishService(bookingId) {
+  const btn = event && event.target; if (btn) { btn.disabled = true; btn.textContent = '⏳...'; }
   try {
     const snap = await db.collection('bookings').doc(bookingId).get();
     if (!snap.exists) { toast('Pedido não encontrado', 'err'); return; }
@@ -1648,7 +1688,7 @@ async function _submitArrivalCode(bookingId) {
       if (!bk.arrCodeHash) { toast('Código não disponível', 'err'); if (btn) { btn.disabled = false; btn.textContent = 'Confirmar ✅'; } return; }
 
       const enteredHash = await hashCode(code);
-      if (enteredHash !== bk.arrCodeHash) {
+      if (String(enteredHash).trim() !== String(bk.arrCodeHash).trim()) {
         document.getElementById('proArrModalErr').style.display = 'block';
         [1, 2, 3, 4].forEach(i => { const el = document.getElementById('proArr' + i); if (el) el.value = ''; });
         const f = document.getElementById('proArr1'); if (f) f.focus();

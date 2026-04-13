@@ -656,7 +656,7 @@ async function handleVerifyCode(request, env) {
     match: expected === hash
   });
 
-  if (!expected || expected !== hash) return json({ ok: false }, 200);
+  if (!expected || String(expected).trim() !== String(hash).trim()) return json({ ok: false }, 200);
 
   if (type === 'arrival') {
     await firestorePatch(env, 'bookings', bookingId, {
