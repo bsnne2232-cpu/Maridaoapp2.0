@@ -11,6 +11,7 @@ let proRequestsListener  = null;
 let proAcceptedListener  = null; // listener por proId (novos bookings)
 let proAcceptedListener2 = null; // listener por acceptedByPro (bookings legados)
 const declinedBookings = new Set();
+const _paymentTimers = new Map(); // bookingId → intervalId
 
 // === PERSISTÊNCIA DE RECUSAS (localStorage por pro) ===
 function _loadDeclined() {
@@ -395,11 +396,27 @@ function loadAcceptedRequests() {
   }
 }
 
+const PAYMENT_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutos
+
+function _clearPaymentTimers() {
+  for (const id of _paymentTimers.values()) clearInterval(id);
+  _paymentTimers.clear();
+}
+
+function _autoCancelPaymentPending(bookingId) {
+  db.collection('bookings').doc(bookingId).update({
+    status: 'cancelled',
+    cancelledAt: firebase.firestore.FieldValue.serverTimestamp(),
+    cancelReason: 'Pagamento não realizado em 5 minutos'
+  }).catch(e => console.error('auto-cancel failed:', e));
+}
+
 function _renderAcceptedSnapshot(snap) {
   const list = document.getElementById('acceptedList');
   const noEl = document.getElementById('noAccepted');
   if (!list) return;
   list.innerHTML = '';
+  _clearPaymentTimers();
 
   if (snap.empty) {
     if (noEl) noEl.style.display = 'block';
@@ -413,6 +430,22 @@ function _renderAcceptedSnapshot(snap) {
 
       let statusBadge = '⏳ Aguardando pagamento';
       let statusColor = '#EAB308';
+
+      // Auto-cancelamento: payment_pending por mais de 5 minutos
+      if (booking.status === 'payment_pending' && booking.priceAgreedAt) {
+        const agreedMs = booking.priceAgreedAt.toDate
+          ? booking.priceAgreedAt.toDate().getTime()
+          : (booking.priceAgreedAt.seconds || 0) * 1000;
+        const elapsed = Date.now() - agreedMs;
+        if (elapsed >= PAYMENT_TIMEOUT_MS) {
+          _autoCancelPaymentPending(bookingId);
+          return; // não renderiza o card — o listener Firestore atualizará a lista
+        }
+        const remSec = Math.ceil((PAYMENT_TIMEOUT_MS - elapsed) / 1000);
+        const mm = Math.floor(remSec / 60), ss = remSec % 60;
+        statusBadge = '⏳ Aguardando pagamento (<span id="pay-cd-' + bookingId + '">' + mm + ':' + String(ss).padStart(2, '0') + '</span>)';
+      }
+
       if (booking.status === 'payment_confirmed') {
         statusBadge = '💳 Pago — pronto para iniciar';
         statusColor = '#10B981';
@@ -518,6 +551,27 @@ function _renderAcceptedSnapshot(snap) {
         (trackSection ? '<div style="margin-top:12px;border-top:1px solid var(--border);padding-top:12px">' + trackSection + '</div>' : '');
 
       list.appendChild(card);
+
+      // Inicia countdown tick para payment_pending com priceAgreedAt
+      if (booking.status === 'payment_pending' && booking.priceAgreedAt) {
+        const agreedMs = booking.priceAgreedAt.toDate
+          ? booking.priceAgreedAt.toDate().getTime()
+          : (booking.priceAgreedAt.seconds || 0) * 1000;
+        const interval = setInterval(() => {
+          const el = document.getElementById('pay-cd-' + bookingId);
+          if (!el) { clearInterval(interval); _paymentTimers.delete(bookingId); return; }
+          const rem = Math.ceil((PAYMENT_TIMEOUT_MS - (Date.now() - agreedMs)) / 1000);
+          if (rem <= 0) {
+            clearInterval(interval);
+            _paymentTimers.delete(bookingId);
+            _autoCancelPaymentPending(bookingId);
+            return;
+          }
+          const mm = Math.floor(rem / 60), ss = rem % 60;
+          el.textContent = mm + ':' + String(ss).padStart(2, '0');
+        }, 1000);
+        _paymentTimers.set(bookingId, interval);
+      }
   });
 }
 
