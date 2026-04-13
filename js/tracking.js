@@ -49,9 +49,10 @@ async function confirmPay() {
 
   let arrCode = null, compCode = null;
   try {
+    const token = await CU.getIdToken();
     const res = await safeFetch(API_URL + '/api/generate-codes', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
       body: JSON.stringify({ userId: CU.uid, bookingId: window.currentBookingId || '' })
     }, 12000);
 
