@@ -106,9 +106,9 @@ async function validateAndPay() {
     return;
   }
 
-  // 404 → endpoint ainda não deployado no Worker. Fallback para fluxo legado.
-  if (res.status === 404) {
-    console.warn('process-payment 404, falling back to legacy flow');
+  // 404 ou 500 → Worker sem credenciais ou não deployado. Fallback para fluxo legado.
+  if (res.status === 404 || res.status === 500) {
+    console.warn('process-payment ' + res.status + ', falling back to legacy flow');
     if (btn) { btn.disabled = false; btn.textContent = 'Pagar agora →'; }
     confirmPay();
     return;
