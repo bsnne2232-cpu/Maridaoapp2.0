@@ -111,6 +111,7 @@ service cloud.firestore {
       allow get: if isSignedIn() && (
         resource.data.userId == request.auth.uid
         || resource.data.proId == request.auth.uid
+        || resource.data.status == 'chat'
         || isAdmin()
       );
       // List de bookings deve ser feita só via query com .where(userId == uid)
@@ -177,9 +178,11 @@ service cloud.firestore {
         return get(/databases/$(database)/documents/bookings/$(bookingId)).data;
       }
       function isParticipant(bookingId) {
+        const bk = booking(bookingId);
         return isSignedIn() && (
-          booking(bookingId).userId == request.auth.uid
-          || booking(bookingId).proId == request.auth.uid
+          bk.userId == request.auth.uid
+          || bk.proId == request.auth.uid
+          || bk.status == 'chat'
         );
       }
 
