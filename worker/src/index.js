@@ -247,7 +247,8 @@ function b64urlBytes(bytes) {
 }
 
 function firestoreBase(env) {
-  return 'https://firestore.googleapis.com/v1/projects/' + env.FIREBASE_PROJECT_ID + '/databases/(default)/documents';
+  const pid = env.FIREBASE_PROJECT_ID || 'maridaoapp-cbb4e';
+  return 'https://firestore.googleapis.com/v1/projects/' + pid + '/databases/(default)/documents';
 }
 
 // Converte um valor JS em Firestore REST "Value"
@@ -332,7 +333,7 @@ async function firestoreQueryOne(env, collection, fieldPath, value) {
     }
   };
   const res = await fetch(
-    'https://firestore.googleapis.com/v1/projects/' + env.FIREBASE_PROJECT_ID + '/databases/(default)/documents:runQuery',
+    'https://firestore.googleapis.com/v1/projects/' + (env.FIREBASE_PROJECT_ID || 'maridaoapp-cbb4e') + '/databases/(default)/documents:runQuery',
     { method: 'POST', headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
   );
   if (!res.ok) throw new Error('firestore query failed: ' + (await res.text()));
@@ -357,7 +358,7 @@ async function firestoreIncrement(env, collection, docId, fieldPath, delta) {
     }]
   };
   const res = await fetch(
-    'https://firestore.googleapis.com/v1/projects/' + env.FIREBASE_PROJECT_ID + '/databases/(default)/documents:commit',
+    'https://firestore.googleapis.com/v1/projects/' + (env.FIREBASE_PROJECT_ID || 'maridaoapp-cbb4e') + '/databases/(default)/documents:commit',
     { method: 'POST', headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
   );
   if (!res.ok) throw new Error('firestore increment failed: ' + (await res.text()));
@@ -377,7 +378,7 @@ async function firestoreCommitSaque(env, proDocId, saqueFields, decrementCents) 
     ]
   };
   const res = await fetch(
-    'https://firestore.googleapis.com/v1/projects/' + env.FIREBASE_PROJECT_ID + '/databases/(default)/documents:commit',
+    'https://firestore.googleapis.com/v1/projects/' + (env.FIREBASE_PROJECT_ID || 'maridaoapp-cbb4e') + '/databases/(default)/documents:commit',
     { method: 'POST', headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
   );
   if (!res.ok) throw new Error('firestore commit saque failed: ' + (await res.text()));
