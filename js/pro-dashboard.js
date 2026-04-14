@@ -346,7 +346,7 @@ function loadAcceptedRequests() {
   if (proAcceptedListener)  { proAcceptedListener();  proAcceptedListener  = null; }
   if (proAcceptedListener2) { proAcceptedListener2(); proAcceptedListener2 = null; }
 
-  const activeStatuses = ['accepted', 'payment_pending', 'payment_confirmed'];
+  const activeStatuses = ['accepted', 'payment_pending', 'payment_confirmed', 'in_progress'];
   const docsById  = new Map(); // bookingId → doc snapshot
   const fromProId = new Set(); // IDs cobertos pelo listener 1 (proId)
 
@@ -446,7 +446,10 @@ function _renderAcceptedSnapshot(snap) {
         statusBadge = '⏳ Aguardando pagamento (<span id="pay-cd-' + bookingId + '">' + mm + ':' + String(ss).padStart(2, '0') + '</span>)';
       }
 
-      if (booking.status === 'payment_confirmed') {
+      if (booking.status === 'in_progress') {
+        statusBadge = '🔧 Em andamento';
+        statusColor = '#10B981';
+      } else if (booking.status === 'payment_confirmed') {
         statusBadge = '💳 Pago — pronto para iniciar';
         statusColor = '#10B981';
       } else if (booking.status === 'accepted') {
@@ -460,7 +463,7 @@ function _renderAcceptedSnapshot(snap) {
 
       // === Tracking action area based on trackStatus ===
       let trackSection = '';
-      if (booking.status === 'payment_confirmed') {
+      if (booking.status === 'payment_confirmed' || booking.status === 'in_progress') {
         if (!ts || ts === 'paid') {
           // Step 1: Pro can mark as on the way
           trackSection =
