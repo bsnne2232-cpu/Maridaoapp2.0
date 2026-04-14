@@ -121,7 +121,7 @@ async function validateAndPay() {
       const err = await res.json();
       if (err && err.error) msg = err.error;
     } catch (_) {}
-    if (res.status === 401) msg = 'Sessão expirada. Faça login novamente.';
+    if (res.status === 401 && (!msg || msg === 'Erro ao processar pagamento.')) msg = 'Sessão expirada. Faça login novamente.';
     if (res.status === 403) msg = 'Operação não autorizada.';
     if (res.status === 409) msg = 'Este serviço já foi pago.';
     if (res.status === 429) msg = 'Muitas tentativas. Aguarde alguns segundos.';

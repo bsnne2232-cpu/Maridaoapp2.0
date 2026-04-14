@@ -117,8 +117,9 @@ async function verifyIdToken(request, env) {
   // Claim checks
   if (payload.exp < now) return { ok: false, status: 401, error: 'expired' };
   if (payload.iat > now + 60) return { ok: false, status: 401, error: 'iat in future' };
-  if (payload.aud !== env.FIREBASE_PROJECT_ID) return { ok: false, status: 401, error: 'bad audience' };
-  if (payload.iss !== 'https://securetoken.google.com/' + env.FIREBASE_PROJECT_ID) {
+  const projectId = env.FIREBASE_PROJECT_ID || 'maridaoapp-cbb4e';
+  if (payload.aud !== projectId) return { ok: false, status: 401, error: 'bad audience' };
+  if (payload.iss !== 'https://securetoken.google.com/' + projectId) {
     return { ok: false, status: 401, error: 'bad issuer' };
   }
   if (!payload.sub) return { ok: false, status: 401, error: 'no sub' };
