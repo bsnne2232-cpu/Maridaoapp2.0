@@ -65,9 +65,10 @@ service cloud.firestore {
     // - Campos privados (cpfMasked, dob, pix) só dono + admin.
     // ---------------------------------------------------------------
     match /professionals/{id} {
-      // Leitura dos cards públicos: apenas profissionais ativos, só para usuários logados.
-      // O app já faz .where('status','==','active') — aqui garantimos no servidor.
-      allow list, get: if isSignedIn() && (
+      // List: qualquer usuário logado pode listar (marketplace).
+      // O app filtra por status=active nas queries; get individual é mais restrito.
+      allow list: if isSignedIn();
+      allow get: if isSignedIn() && (
         (resource.data.status == 'active')
         || isProOwner(resource.data)
         || isAdmin()
