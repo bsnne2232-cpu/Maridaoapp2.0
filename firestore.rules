@@ -124,7 +124,8 @@ service cloud.firestore {
 
       // Regras de atualização de booking:
       // 1. Profissional aceitando pedido pendente (proId ainda é null)
-      // 2. Participante (cliente ou pro aceito) atualizando campos não-financeiros
+      // 2. Cliente confirmando pagamento (fluxo fallback / TEST_MODE sem Worker)
+      // 3. Participante (cliente ou pro aceito) atualizando campos não-financeiros
       allow update: if isAdmin()
         // Profissional aceitando pedido pendente (proId ainda não definido)
         || (
@@ -135,6 +136,18 @@ service cloud.firestore {
           && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
             'compCode', 'compCodeHash', 'arrCodeHash', 'paidAt', 'commission',
             'netToPro', 'balance', 'userId'
+          ])
+        )
+        // Cliente confirmando pagamento (fallback: Worker indisponível / TEST_MODE)
+        // Permite gravar arrCodeHash, compCode, compCodeHash, paidAt, trackStatus=paid
+        // somente quando o booking ainda está em payment_pending.
+        || (
+          isSignedIn()
+          && resource.data.userId == request.auth.uid
+          && resource.data.status == 'payment_pending'
+          && request.resource.data.status == 'payment_confirmed'
+          && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+            'commission', 'netToPro', 'balance', 'userId', 'proId'
           ])
         )
         // Participante (cliente ou pro aceito) atualizando campos não-financeiros
